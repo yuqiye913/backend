@@ -1,4 +1,4 @@
-package com.programming.techie.springredditclone.service;
+package com.programming.techie.springredditclone.service.impl;
 
 import com.programming.techie.springredditclone.model.User;
 import com.programming.techie.springredditclone.repository.UserRepository;

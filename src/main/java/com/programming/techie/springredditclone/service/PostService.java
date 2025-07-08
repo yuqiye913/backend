@@ -39,4 +39,24 @@ public interface PostService {
      * @return List of post responses
      */
     List<PostResponse> getPostsByUsername(String username);
+    
+    /**
+     * Get posts that belong to any of the specified subreddits
+     * @param subredditNames List of subreddit names
+     * @return List of post responses
+     */
+    List<PostResponse> getPostsByMultipleSubreddits(List<String> subredditNames);
+    
+    /**
+     * Update an existing post
+     * @param postId Post ID to update
+     * @param postRequest Updated post data
+     */
+    void updatePost(Long postId, PostRequest postRequest);
+    
+    /**
+     * Delete a post by ID
+     * @param postId Post ID to delete
+     */
+    void deletePost(Long postId);
 }

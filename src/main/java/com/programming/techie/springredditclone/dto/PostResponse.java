@@ -4,6 +4,8 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.List;
+
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
@@ -13,7 +15,8 @@ public class PostResponse {
     private String url;
     private String description;
     private String userName;
-    private String subredditName;
+    private String subredditName;  // Keep for backward compatibility
+    private List<String> subredditNames;  // Multiple subreddits
     private Integer voteCount;
     private Integer commentCount;
     private String duration;

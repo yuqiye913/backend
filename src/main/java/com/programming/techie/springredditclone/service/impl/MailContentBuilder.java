@@ -1,4 +1,4 @@
-package com.programming.techie.springredditclone.service;
+package com.programming.techie.springredditclone.service.impl;
 
 import lombok.AllArgsConstructor;
 import org.springframework.stereotype.Service;

@@ -14,7 +14,8 @@ import java.util.Optional;
 public interface CallingResponseRepository extends JpaRepository<CallingResponse, Long> {
     List<CallingResponse> findByResponder(User responder);
     List<CallingResponse> findByResponseStatus(String responseStatus);
-    Optional<CallingResponse> findByRequestId(Long requestId);
+    @Query("SELECT c FROM CallingResponse c WHERE c.request.requestId = :requestId")
+    Optional<CallingResponse> findByRequestId(@Param("requestId") Long requestId);
     
     @Query("SELECT cr FROM CallingResponse cr WHERE cr.responder = :user ORDER BY cr.respondedAt DESC")
     List<CallingResponse> findResponsesByResponder(@Param("user") User user);

@@ -13,7 +13,7 @@ import com.programming.techie.springredditclone.repository.PostRepository;
 import com.programming.techie.springredditclone.repository.UserRepository;
 import com.programming.techie.springredditclone.service.AuthService;
 import com.programming.techie.springredditclone.service.CommentService;
-import com.programming.techie.springredditclone.service.MailContentBuilder;
+import com.programming.techie.springredditclone.service.impl.MailContentBuilder;
 import com.programming.techie.springredditclone.service.MailService;
 import lombok.AllArgsConstructor;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;

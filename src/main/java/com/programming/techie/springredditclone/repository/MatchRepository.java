@@ -21,7 +21,8 @@ public interface MatchRepository extends JpaRepository<Match, Long> {
     List<Match> findByMatchStatus(String matchStatus);
     List<Match> findByMatchType(String matchType);
     List<Match> findByIsMutualMatch(boolean isMutualMatch);
-    List<Match> findByIsSuperLike(boolean isSuperLike);
+    @Query("SELECT m FROM Match m WHERE m.isSuperLike = :isSuperLike")
+    List<Match> findByIsSuperLike(@Param("isSuperLike") boolean isSuperLike);
     List<Match> findByIsVerifiedMatch(boolean isVerifiedMatch);
     
     // Find matches for a specific user

@@ -28,4 +28,4 @@ public interface FollowRepository extends JpaRepository<Follow, Long> {
     
     @Query("SELECT f FROM Follow f WHERE f.following = :user AND f.isActive = true")
     List<Follow> findActiveFollowersByUser(@Param("user") User user);
-} 
+}

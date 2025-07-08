@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.Instant;
+import java.util.Set;
 
 @Getter
 @Setter
@@ -24,7 +25,13 @@ public class Post {
     @JoinColumn(name = "userId", referencedColumnName = "userId")
     private User user;
     private Instant createdDate;
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "id", referencedColumnName = "id")
-    private Subreddit subreddit;
+    
+    // Multiple subreddits only - cleaner structure
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+        name = "post_subreddits",
+        joinColumns = @JoinColumn(name = "post_id"),
+        inverseJoinColumns = @JoinColumn(name = "subreddit_id")
+    )
+    private Set<Subreddit> subreddits;
 }

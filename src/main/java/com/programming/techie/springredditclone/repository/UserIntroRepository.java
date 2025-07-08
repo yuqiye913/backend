@@ -11,7 +11,8 @@ import java.util.Optional;
 
 @Repository
 public interface UserIntroRepository extends JpaRepository<UserIntro, Long> {
-    Optional<UserIntro> findByUserId(Long userId);
+    @Query("SELECT i FROM UserIntro i WHERE i.user.userId = :userId")
+    Optional<UserIntro> findByUserId(@Param("userId") Long userId);
     List<UserIntro> findByIsPublic(boolean isPublic);
     List<UserIntro> findByIsVerified(boolean isVerified);
     

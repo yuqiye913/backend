@@ -66,17 +66,6 @@ public class User {
     @OneToMany(mappedBy = "receiver", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private List<DirectMessage> receivedMessages;
     
-    // Friend request relationships
-    @OneToMany(mappedBy = "sender", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    private List<FriendRequest> sentFriendRequests;
-    
-    @OneToMany(mappedBy = "receiver", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    private List<FriendRequest> receivedFriendRequests;
-    
-    // Friend response relationships
-    @OneToMany(mappedBy = "responder", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    private List<FriendResponse> friendResponses;
-    
     // Calling request relationships
     @OneToMany(mappedBy = "caller", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private List<CallingRequest> sentCallingRequests;
@@ -85,6 +74,7 @@ public class User {
     private List<CallingRequest> receivedCallingRequests;
     
     // Calling response relationships
+    @Transient
     @OneToMany(mappedBy = "responder", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private List<CallingResponse> callingResponses;
     
