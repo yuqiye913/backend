@@ -3,6 +3,7 @@ package com.programming.techie.springredditclone.service.impl;
 import com.programming.techie.springredditclone.dto.FollowRequestDto;
 import com.programming.techie.springredditclone.dto.GetFollowersDto;
 import com.programming.techie.springredditclone.dto.FollowerCountDto;
+import com.programming.techie.springredditclone.dto.FollowingCountDto;
 import com.programming.techie.springredditclone.model.Follow;
 import com.programming.techie.springredditclone.model.User;
 import com.programming.techie.springredditclone.repository.FollowRepository;
@@ -93,6 +94,16 @@ public class FollowServiceImpl implements FollowService {
         Long followerCount = followRepository.countFollowersByUser(user);
         
         return new FollowerCountDto(user.getUserId(), user.getUsername(), followerCount);
+    }
+
+    @Override
+    public FollowingCountDto getFollowingCountByUserId(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        
+        Long followingCount = followRepository.countFollowingByUser(user);
+        
+        return new FollowingCountDto(user.getUserId(), user.getUsername(), followingCount);
     }
 
     private GetFollowersDto mapFollowToGetFollowersDto(Follow follow) {

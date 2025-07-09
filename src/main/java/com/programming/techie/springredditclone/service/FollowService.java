@@ -3,6 +3,7 @@ package com.programming.techie.springredditclone.service;
 import com.programming.techie.springredditclone.dto.FollowRequestDto;
 import com.programming.techie.springredditclone.dto.GetFollowersDto;
 import com.programming.techie.springredditclone.dto.FollowerCountDto;
+import com.programming.techie.springredditclone.dto.FollowingCountDto;
 
 import java.util.List;
 
@@ -11,4 +12,5 @@ public interface FollowService {
     void unfollowUser(Long followingId);
     List<GetFollowersDto> getFollowersByUserId(Long userId);
     FollowerCountDto getFollowerCountByUserId(Long userId);
+    FollowingCountDto getFollowingCountByUserId(Long userId);
 }

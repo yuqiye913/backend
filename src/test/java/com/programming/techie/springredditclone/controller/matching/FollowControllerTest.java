@@ -5,6 +5,7 @@ import com.programming.techie.springredditclone.controller.FollowController;
 import com.programming.techie.springredditclone.dto.FollowRequestDto;
 import com.programming.techie.springredditclone.dto.GetFollowersDto;
 import com.programming.techie.springredditclone.dto.FollowerCountDto;
+import com.programming.techie.springredditclone.dto.FollowingCountDto;
 import com.programming.techie.springredditclone.service.FollowService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -48,6 +49,7 @@ class FollowControllerTest {
     private FollowRequestDto invalidFollowRequest;
     private List<GetFollowersDto> sampleFollowers;
     private FollowerCountDto sampleFollowerCount;
+    private FollowingCountDto sampleFollowingCount;
 
     @BeforeEach
     void setUp() {
@@ -68,6 +70,9 @@ class FollowControllerTest {
 
         // Create sample follower count
         sampleFollowerCount = new FollowerCountDto(1L, "testuser", 2L);
+        
+        // Create sample following count
+        sampleFollowingCount = new FollowingCountDto(1L, "testuser", 3L);
     }
 
     // ========== FOLLOW USER TESTS ==========
@@ -286,6 +291,55 @@ class FollowControllerTest {
         verify(followService).getFollowerCountByUserId(999L);
     }
 
+    // ========== GET FOLLOWING COUNT TESTS ==========
+    @Test
+    @DisplayName("Should get following count by user ID")
+    @WithMockUser(username = "testuser")
+    void shouldGetFollowingCountByUserId() throws Exception {
+        // Given
+        when(followService.getFollowingCountByUserId(eq(1L))).thenReturn(sampleFollowingCount);
+
+        // When & Then
+        mockMvc.perform(get("/api/follow/following/count/1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.userId").value(1))
+                .andExpect(jsonPath("$.username").value("testuser"))
+                .andExpect(jsonPath("$.followingCount").value(3));
+
+        verify(followService).getFollowingCountByUserId(1L);
+    }
+
+    @Test
+    @DisplayName("Should return zero count when user is not following anyone")
+    @WithMockUser(username = "testuser")
+    void shouldReturnZeroCountWhenUserIsNotFollowingAnyone() throws Exception {
+        // Given
+        FollowingCountDto zeroCount = new FollowingCountDto(1L, "testuser", 0L);
+        when(followService.getFollowingCountByUserId(eq(1L))).thenReturn(zeroCount);
+
+        // When & Then
+        mockMvc.perform(get("/api/follow/following/count/1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.followingCount").value(0));
+
+        verify(followService).getFollowingCountByUserId(1L);
+    }
+
+    @Test
+    @DisplayName("Should handle service exception when getting following count")
+    @WithMockUser(username = "testuser")
+    void shouldHandleServiceExceptionWhenGettingFollowingCount() throws Exception {
+        // Given
+        doThrow(new RuntimeException("User not found"))
+                .when(followService).getFollowingCountByUserId(eq(999L));
+
+        // When & Then
+        mockMvc.perform(get("/api/follow/following/count/999"))
+                .andExpect(status().isInternalServerError());
+
+        verify(followService).getFollowingCountByUserId(999L);
+    }
+
     // ========== AUTHENTICATION TESTS ==========
     @Test
     @DisplayName("Should require authentication for follow endpoint")
@@ -318,6 +372,14 @@ class FollowControllerTest {
     void shouldRequireAuthenticationForGetFollowerCountEndpoint() throws Exception {
         // When & Then
         mockMvc.perform(get("/api/follow/followers/count/1"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("Should require authentication for get following count endpoint")
+    void shouldRequireAuthenticationForGetFollowingCountEndpoint() throws Exception {
+        // When & Then
+        mockMvc.perform(get("/api/follow/following/count/1"))
                 .andExpect(status().isForbidden());
     }
 } 

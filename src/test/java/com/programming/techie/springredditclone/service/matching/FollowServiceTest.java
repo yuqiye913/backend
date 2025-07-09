@@ -3,6 +3,7 @@ package com.programming.techie.springredditclone.service.matching;
 import com.programming.techie.springredditclone.dto.FollowRequestDto;
 import com.programming.techie.springredditclone.dto.GetFollowersDto;
 import com.programming.techie.springredditclone.dto.FollowerCountDto;
+import com.programming.techie.springredditclone.dto.FollowingCountDto;
 import com.programming.techie.springredditclone.model.Follow;
 import com.programming.techie.springredditclone.model.User;
 import com.programming.techie.springredditclone.repository.FollowRepository;
@@ -346,5 +347,61 @@ class FollowServiceTest {
 
         // Then
         assertThat(result.getFollowerCount()).isEqualTo(1000L);
+    }
+
+    // ========== GET FOLLOWING COUNT TESTS ==========
+    @Test
+    @DisplayName("Should get following count by user ID")
+    void shouldGetFollowingCountByUserId() {
+        // Given
+        when(userRepository.findById(2L)).thenReturn(Optional.of(following));
+        when(followRepository.countFollowingByUser(following)).thenReturn(5L);
+
+        // When
+        FollowingCountDto result = followService.getFollowingCountByUserId(2L);
+
+        // Then
+        assertThat(result.getUserId()).isEqualTo(2L);
+        assertThat(result.getUsername()).isEqualTo("following");
+        assertThat(result.getFollowingCount()).isEqualTo(5L);
+    }
+
+    @Test
+    @DisplayName("Should throw exception when user not found for getting following count")
+    void shouldThrowExceptionWhenUserNotFoundForGettingFollowingCount() {
+        // Given
+        when(userRepository.findById(999L)).thenReturn(Optional.empty());
+
+        // When & Then
+        assertThatThrownBy(() -> followService.getFollowingCountByUserId(999L))
+                .isInstanceOf(RuntimeException.class);
+    }
+
+    @Test
+    @DisplayName("Should return zero count when user is not following anyone")
+    void shouldReturnZeroCountWhenUserIsNotFollowingAnyone() {
+        // Given
+        when(userRepository.findById(2L)).thenReturn(Optional.of(following));
+        when(followRepository.countFollowingByUser(following)).thenReturn(0L);
+
+        // When
+        FollowingCountDto result = followService.getFollowingCountByUserId(2L);
+
+        // Then
+        assertThat(result.getFollowingCount()).isEqualTo(0L);
+    }
+
+    @Test
+    @DisplayName("Should return large following count")
+    void shouldReturnLargeFollowingCount() {
+        // Given
+        when(userRepository.findById(2L)).thenReturn(Optional.of(following));
+        when(followRepository.countFollowingByUser(following)).thenReturn(1000L);
+
+        // When
+        FollowingCountDto result = followService.getFollowingCountByUserId(2L);
+
+        // Then
+        assertThat(result.getFollowingCount()).isEqualTo(1000L);
     }
 } 

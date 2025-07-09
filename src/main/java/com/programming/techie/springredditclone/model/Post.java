@@ -26,7 +26,6 @@ public class Post {
     private User user;
     private Instant createdDate;
     
-    // Multiple subreddits only - cleaner structure
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
         name = "post_subreddits",

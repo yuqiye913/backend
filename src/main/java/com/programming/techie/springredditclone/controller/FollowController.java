@@ -7,6 +7,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import com.programming.techie.springredditclone.dto.FollowRequestDto;
 import com.programming.techie.springredditclone.dto.GetFollowersDto;
 import com.programming.techie.springredditclone.dto.FollowerCountDto;
+import com.programming.techie.springredditclone.dto.FollowingCountDto;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -51,5 +52,12 @@ public class FollowController {
     public ResponseEntity<FollowerCountDto> getFollowerCountByUserId(@PathVariable Long userId) {
         FollowerCountDto followerCount = followService.getFollowerCountByUserId(userId);
         return ResponseEntity.ok(followerCount);
+    }
+
+    @GetMapping("/following/count/{userId}")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<FollowingCountDto> getFollowingCountByUserId(@PathVariable Long userId) {
+        FollowingCountDto followingCount = followService.getFollowingCountByUserId(userId);
+        return ResponseEntity.ok(followingCount);
     }
 }
