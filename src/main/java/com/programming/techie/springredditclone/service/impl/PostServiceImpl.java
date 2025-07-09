@@ -1,5 +1,6 @@
 package com.programming.techie.springredditclone.service.impl;
 
+import com.programming.techie.springredditclone.dto.CursorPageResponse;
 import com.programming.techie.springredditclone.dto.PostRequest;
 import com.programming.techie.springredditclone.dto.PostResponse;
 import com.programming.techie.springredditclone.mapper.PostMapper;
@@ -11,8 +12,10 @@ import com.programming.techie.springredditclone.repository.SubredditRepository;
 import com.programming.techie.springredditclone.repository.UserRepository;
 import com.programming.techie.springredditclone.service.AuthService;
 import com.programming.techie.springredditclone.service.PostService;
+import com.programming.techie.springredditclone.util.CursorUtil;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,6 +36,7 @@ public class PostServiceImpl implements PostService {
     private final UserRepository userRepository;
     private final AuthService authService;
     private final PostMapper postMapper;
+    private final CursorUtil cursorUtil;
 
     @Override
     public void save(PostRequest postRequest) {
@@ -90,33 +94,104 @@ public class PostServiceImpl implements PostService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<PostResponse> getAllPosts() {
-        return postRepository.findAll()
-                .stream()
+    public CursorPageResponse<PostResponse> getAllPosts(String cursor, int limit) {
+        Instant createdDate = Instant.now();
+        Long postId = Long.MAX_VALUE;
+        
+        if (cursor != null && !cursor.isEmpty()) {
+            CursorUtil.CursorData cursorData = cursorUtil.decodeCursor(cursor);
+            createdDate = cursorData.getCreatedDate();
+            postId = cursorData.getId();
+        }
+        
+        List<Post> posts = postRepository.findAllWithCursor(createdDate, postId, PageRequest.of(0, limit + 1));
+        
+        boolean hasMore = posts.size() > limit;
+        if (hasMore) {
+            posts = posts.subList(0, limit);
+        }
+        
+        List<PostResponse> postResponses = posts.stream()
                 .map(postMapper::mapToDto)
                 .collect(Collectors.toList());
+        
+        String nextCursor = null;
+        if (hasMore && !posts.isEmpty()) {
+            Post lastPost = posts.get(posts.size() - 1);
+            nextCursor = cursorUtil.encodeCursor(lastPost.getCreatedDate(), lastPost.getPostId());
+        }
+        
+        return new CursorPageResponse<>(postResponses, nextCursor, hasMore, limit);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<PostResponse> getPostsBySubreddit(Long subredditId) {
+    public CursorPageResponse<PostResponse> getPostsBySubreddit(Long subredditId, String cursor, int limit) {
         Subreddit subreddit = subredditRepository.findById(subredditId)
                 .orElseThrow(() -> new RuntimeException("Subreddit not found with id - " + subredditId));
-        return postRepository.findBySubredditsContaining(subreddit)
-                .stream()
+        
+        Instant createdDate = Instant.now();
+        Long postId = Long.MAX_VALUE;
+        
+        if (cursor != null && !cursor.isEmpty()) {
+            CursorUtil.CursorData cursorData = cursorUtil.decodeCursor(cursor);
+            createdDate = cursorData.getCreatedDate();
+            postId = cursorData.getId();
+        }
+        
+        List<Post> posts = postRepository.findBySubredditWithCursor(subreddit, createdDate, postId, PageRequest.of(0, limit + 1));
+        
+        boolean hasMore = posts.size() > limit;
+        if (hasMore) {
+            posts = posts.subList(0, limit);
+        }
+        
+        List<PostResponse> postResponses = posts.stream()
                 .map(postMapper::mapToDto)
                 .collect(Collectors.toList());
+        
+        String nextCursor = null;
+        if (hasMore && !posts.isEmpty()) {
+            Post lastPost = posts.get(posts.size() - 1);
+            nextCursor = cursorUtil.encodeCursor(lastPost.getCreatedDate(), lastPost.getPostId());
+        }
+        
+        return new CursorPageResponse<>(postResponses, nextCursor, hasMore, limit);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<PostResponse> getPostsByUsername(String username) {
+    public CursorPageResponse<PostResponse> getPostsByUsername(String username, String cursor, int limit) {
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new RuntimeException("User not found with username - " + username));
-        return postRepository.findByUser(user)
-                .stream()
+        
+        Instant createdDate = Instant.now();
+        Long postId = Long.MAX_VALUE;
+        
+        if (cursor != null && !cursor.isEmpty()) {
+            CursorUtil.CursorData cursorData = cursorUtil.decodeCursor(cursor);
+            createdDate = cursorData.getCreatedDate();
+            postId = cursorData.getId();
+        }
+        
+        List<Post> posts = postRepository.findByUserWithCursor(user, createdDate, postId, PageRequest.of(0, limit + 1));
+        
+        boolean hasMore = posts.size() > limit;
+        if (hasMore) {
+            posts = posts.subList(0, limit);
+        }
+        
+        List<PostResponse> postResponses = posts.stream()
                 .map(postMapper::mapToDto)
                 .collect(Collectors.toList());
+        
+        String nextCursor = null;
+        if (hasMore && !posts.isEmpty()) {
+            Post lastPost = posts.get(posts.size() - 1);
+            nextCursor = cursorUtil.encodeCursor(lastPost.getCreatedDate(), lastPost.getPostId());
+        }
+        
+        return new CursorPageResponse<>(postResponses, nextCursor, hasMore, limit);
     }
 
     /**

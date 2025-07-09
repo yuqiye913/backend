@@ -1,5 +1,6 @@
 package com.programming.techie.springredditclone.service;
 
+import com.programming.techie.springredditclone.dto.CursorPageResponse;
 import com.programming.techie.springredditclone.dto.PostRequest;
 import com.programming.techie.springredditclone.dto.PostResponse;
 
@@ -21,24 +22,30 @@ public interface PostService {
     PostResponse getPost(Long id);
     
     /**
-     * Get all posts
-     * @return List of post responses
+     * Get all posts with cursor-based pagination
+     * @param cursor Cursor for pagination (optional)
+     * @param limit Number of posts to return
+     * @return Cursor page response
      */
-    List<PostResponse> getAllPosts();
+    CursorPageResponse<PostResponse> getAllPosts(String cursor, int limit);
     
     /**
-     * Get posts by subreddit ID
+     * Get posts by subreddit ID with cursor-based pagination
      * @param subredditId Subreddit ID
-     * @return List of post responses
+     * @param cursor Cursor for pagination (optional)
+     * @param limit Number of posts to return
+     * @return Cursor page response
      */
-    List<PostResponse> getPostsBySubreddit(Long subredditId);
+    CursorPageResponse<PostResponse> getPostsBySubreddit(Long subredditId, String cursor, int limit);
     
     /**
-     * Get posts by username
+     * Get posts by username with cursor-based pagination
      * @param username Username
-     * @return List of post responses
+     * @param cursor Cursor for pagination (optional)
+     * @param limit Number of posts to return
+     * @return Cursor page response
      */
-    List<PostResponse> getPostsByUsername(String username);
+    CursorPageResponse<PostResponse> getPostsByUsername(String username, String cursor, int limit);
     
     /**
      * Get posts that belong to any of the specified subreddits

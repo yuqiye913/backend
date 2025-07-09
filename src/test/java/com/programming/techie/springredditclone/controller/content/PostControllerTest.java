@@ -13,6 +13,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
+import com.programming.techie.springredditclone.dto.CursorPageResponse;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
@@ -20,6 +21,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -158,13 +160,14 @@ class PostControllerTest {
     void shouldGetAllPosts() throws Exception {
         // Given
         List<PostResponse> posts = List.of(samplePostResponse);
-        when(postService.getAllPosts()).thenReturn(posts);
+        CursorPageResponse<PostResponse> cursorPage = new CursorPageResponse<>(posts, null, false, 10);
+        when(postService.getAllPosts(any(String.class), anyInt())).thenReturn(cursorPage);
 
         // When & Then
         mockMvc.perform(get("/api/posts"))
                 .andExpect(status().isOk());
 
-        verify(postService).getAllPosts();
+        verify(postService).getAllPosts(eq(null), eq(10));
     }
 
     @Test
@@ -185,13 +188,14 @@ class PostControllerTest {
     void shouldGetPostsBySubredditId() throws Exception {
         // Given
         List<PostResponse> posts = List.of(samplePostResponse);
-        when(postService.getPostsBySubreddit(1L)).thenReturn(posts);
+        CursorPageResponse<PostResponse> cursorPage = new CursorPageResponse<>(posts, null, false, 10);
+        when(postService.getPostsBySubreddit(eq(1L), any(String.class), anyInt())).thenReturn(cursorPage);
 
         // When & Then
         mockMvc.perform(get("/api/posts?subredditId=1"))
                 .andExpect(status().isOk());
 
-        verify(postService).getPostsBySubreddit(1L);
+        verify(postService).getPostsBySubreddit(eq(1L), eq(null), eq(10));
     }
 
     @Test
@@ -199,13 +203,14 @@ class PostControllerTest {
     void shouldGetPostsByUsername() throws Exception {
         // Given
         List<PostResponse> posts = List.of(samplePostResponse);
-        when(postService.getPostsByUsername("testuser")).thenReturn(posts);
+        CursorPageResponse<PostResponse> cursorPage = new CursorPageResponse<>(posts, null, false, 10);
+        when(postService.getPostsByUsername(eq("testuser"), any(String.class), anyInt())).thenReturn(cursorPage);
 
         // When & Then
         mockMvc.perform(get("/api/posts?username=testuser"))
                 .andExpect(status().isOk());
 
-        verify(postService).getPostsByUsername("testuser");
+        verify(postService).getPostsByUsername(eq("testuser"), eq(null), eq(10));
     }
 
     @Test
@@ -241,26 +246,26 @@ class PostControllerTest {
     @DisplayName("Should handle service exception for get posts by subreddit")
     void shouldHandleServiceExceptionForGetPostsBySubreddit() throws Exception {
         // Given
-        when(postService.getPostsBySubreddit(999L)).thenThrow(new RuntimeException("Subreddit not found"));
+        when(postService.getPostsBySubreddit(eq(999L), eq(null), eq(10))).thenThrow(new RuntimeException("Subreddit not found"));
 
         // When & Then
         mockMvc.perform(get("/api/posts?subredditId=999"))
                 .andExpect(status().isInternalServerError());
 
-        verify(postService).getPostsBySubreddit(999L);
+        verify(postService).getPostsBySubreddit(eq(999L), eq(null), eq(10));
     }
 
     @Test
     @DisplayName("Should handle service exception for get posts by username")
     void shouldHandleServiceExceptionForGetPostsByUsername() throws Exception {
         // Given
-        when(postService.getPostsByUsername("nonexistent")).thenThrow(new RuntimeException("User not found"));
+        when(postService.getPostsByUsername(eq("nonexistent"), eq(null), eq(10))).thenThrow(new RuntimeException("User not found"));
 
         // When & Then
         mockMvc.perform(get("/api/posts?username=nonexistent"))
                 .andExpect(status().isInternalServerError());
 
-        verify(postService).getPostsByUsername("nonexistent");
+        verify(postService).getPostsByUsername(eq("nonexistent"), eq(null), eq(10));
     }
 
     @Test

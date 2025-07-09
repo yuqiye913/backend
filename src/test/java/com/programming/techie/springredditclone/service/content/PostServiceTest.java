@@ -20,6 +20,7 @@ import org.mockito.Captor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import com.programming.techie.springredditclone.dto.CursorPageResponse;
 
 import java.time.Instant;
 import java.util.List;
@@ -29,6 +30,7 @@ import java.util.Set;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -267,16 +269,16 @@ class PostServiceTest {
         List<PostResponse> expectedResponses = List.of(new PostResponse(), new PostResponse());
 
         when(subredditRepository.findById(1L)).thenReturn(Optional.of(programmingSubreddit));
-        when(postRepository.findBySubredditsContaining(programmingSubreddit)).thenReturn(posts);
+        when(postRepository.findBySubredditWithCursor(eq(programmingSubreddit), any(Instant.class), any(Long.class), any(org.springframework.data.domain.Pageable.class))).thenReturn(posts);
         when(postMapper.mapToDto(posts.get(0))).thenReturn(expectedResponses.get(0));
         when(postMapper.mapToDto(posts.get(1))).thenReturn(expectedResponses.get(1));
 
         // When
-        List<PostResponse> result = postService.getPostsBySubreddit(1L);
+        CursorPageResponse<PostResponse> result = postService.getPostsBySubreddit(1L, null, 10);
 
         // Then
-        assertThat(result).isEqualTo(expectedResponses);
-        verify(postRepository).findBySubredditsContaining(programmingSubreddit);
+        assertThat(result.getContent()).isEqualTo(expectedResponses);
+        verify(postRepository).findBySubredditWithCursor(eq(programmingSubreddit), any(Instant.class), any(Long.class), any(org.springframework.data.domain.Pageable.class));
     }
 
     @Test
@@ -287,16 +289,16 @@ class PostServiceTest {
         List<PostResponse> expectedResponses = List.of(new PostResponse(), new PostResponse());
 
         when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(testUser));
-        when(postRepository.findByUser(testUser)).thenReturn(posts);
+        when(postRepository.findByUserWithCursor(eq(testUser), any(Instant.class), any(Long.class), any(org.springframework.data.domain.Pageable.class))).thenReturn(posts);
         when(postMapper.mapToDto(posts.get(0))).thenReturn(expectedResponses.get(0));
         when(postMapper.mapToDto(posts.get(1))).thenReturn(expectedResponses.get(1));
 
         // When
-        List<PostResponse> result = postService.getPostsByUsername("testuser");
+        CursorPageResponse<PostResponse> result = postService.getPostsByUsername("testuser", null, 10);
 
         // Then
-        assertThat(result).isEqualTo(expectedResponses);
-        verify(postRepository).findByUser(testUser);
+        assertThat(result.getContent()).isEqualTo(expectedResponses);
+        verify(postRepository).findByUserWithCursor(eq(testUser), any(Instant.class), any(Long.class), any(org.springframework.data.domain.Pageable.class));
     }
 
     @Test

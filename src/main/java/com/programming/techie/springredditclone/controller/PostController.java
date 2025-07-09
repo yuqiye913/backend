@@ -1,5 +1,6 @@
 package com.programming.techie.springredditclone.controller;
 
+import com.programming.techie.springredditclone.dto.CursorPageResponse;
 import com.programming.techie.springredditclone.dto.PostRequest;
 import com.programming.techie.springredditclone.dto.PostResponse;
 import com.programming.techie.springredditclone.service.PostService;
@@ -30,8 +31,11 @@ public class PostController {
     }
 
     @GetMapping
-    public ResponseEntity<List<PostResponse>> getAllPosts() {
-        return status(HttpStatus.OK).body(postService.getAllPosts());
+    public ResponseEntity<CursorPageResponse<PostResponse>> getAllPosts(
+            @RequestParam(required = false) String cursor,
+            @RequestParam(defaultValue = "10") int limit) {
+        
+        return status(HttpStatus.OK).body(postService.getAllPosts(cursor, limit));
     }
 
     @GetMapping("/{id}")
@@ -40,13 +44,21 @@ public class PostController {
     }
 
     @GetMapping(params = "subredditId")
-    public ResponseEntity<List<PostResponse>> getPostsBySubreddit(@RequestParam Long subredditId) {
-        return status(HttpStatus.OK).body(postService.getPostsBySubreddit(subredditId));
+    public ResponseEntity<CursorPageResponse<PostResponse>> getPostsBySubreddit(
+            @RequestParam Long subredditId,
+            @RequestParam(required = false) String cursor,
+            @RequestParam(defaultValue = "10") int limit) {
+        
+        return status(HttpStatus.OK).body(postService.getPostsBySubreddit(subredditId, cursor, limit));
     }
 
     @GetMapping(params = "username")
-    public ResponseEntity<List<PostResponse>> getPostsByUsername(@RequestParam String username) {
-        return status(HttpStatus.OK).body(postService.getPostsByUsername(username));
+    public ResponseEntity<CursorPageResponse<PostResponse>> getPostsByUsername(
+            @RequestParam String username,
+            @RequestParam(required = false) String cursor,
+            @RequestParam(defaultValue = "10") int limit) {
+        
+        return status(HttpStatus.OK).body(postService.getPostsByUsername(username, cursor, limit));
     }
 
     @GetMapping("/by-subreddits")
