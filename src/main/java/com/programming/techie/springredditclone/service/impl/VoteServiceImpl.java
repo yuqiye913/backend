@@ -10,6 +10,7 @@ import com.programming.techie.springredditclone.repository.PostRepository;
 import com.programming.techie.springredditclone.repository.VoteRepository;
 import com.programming.techie.springredditclone.service.AuthService;
 import com.programming.techie.springredditclone.service.VoteService;
+import com.programming.techie.springredditclone.mapper.VoteMapper;
 import lombok.AllArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,6 +26,7 @@ public class VoteServiceImpl implements VoteService {
     private final VoteRepository voteRepository;
     private final PostRepository postRepository;
     private final AuthService authService;
+    private final VoteMapper voteMapper;
 
     @Override
     @Transactional
@@ -57,17 +59,11 @@ public class VoteServiceImpl implements VoteService {
             } else {
                 post.setVoteCount(post.getVoteCount() - 1);
             }
-            voteRepository.save(mapToVote(voteDto, post));
+            voteRepository.save(voteMapper.mapToVote(voteDto, post, authService.getCurrentUser()));
         }
         
         postRepository.save(post);
     }
 
-    private Vote mapToVote(VoteDto voteDto, Post post) {
-        return Vote.builder()
-                .voteType(voteDto.getVoteType())
-                .post(post)
-                .user(authService.getCurrentUser())
-                .build();
-    }
+
 } 

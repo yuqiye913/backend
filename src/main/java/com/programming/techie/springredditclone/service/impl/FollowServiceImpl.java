@@ -11,6 +11,7 @@ import com.programming.techie.springredditclone.repository.FollowRepository;
 import com.programming.techie.springredditclone.repository.UserRepository;
 import com.programming.techie.springredditclone.service.AuthService;
 import com.programming.techie.springredditclone.service.FollowService;
+import com.programming.techie.springredditclone.mapper.FollowMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -23,12 +24,14 @@ public class FollowServiceImpl implements FollowService {
     private final FollowRepository followRepository;
     private final UserRepository userRepository;
     private final AuthService authService;
+    private final FollowMapper followMapper;
 
     @Autowired
-    public FollowServiceImpl(FollowRepository followRepository, UserRepository userRepository, AuthService authService) {
+    public FollowServiceImpl(FollowRepository followRepository, UserRepository userRepository, AuthService authService, FollowMapper followMapper) {
         this.followRepository = followRepository;
         this.userRepository = userRepository;
         this.authService = authService;
+        this.followMapper = followMapper;
     }
 
     @Override
@@ -83,7 +86,7 @@ public class FollowServiceImpl implements FollowService {
         List<Follow> followers = followRepository.findActiveFollowersByUser(user);
         
         return followers.stream()
-                .map(this::mapFollowToGetFollowersDto)
+                .map(followMapper::mapToGetFollowersDto)
                 .collect(Collectors.toList());
     }
 
@@ -95,7 +98,7 @@ public class FollowServiceImpl implements FollowService {
         List<Follow> following = followRepository.findActiveFollowingByUser(user);
         
         return following.stream()
-                .map(this::mapFollowToGetFollowingDto)
+                .map(followMapper::mapToGetFollowingDto)
                 .collect(Collectors.toList());
     }
 
@@ -106,7 +109,7 @@ public class FollowServiceImpl implements FollowService {
         
         Long followerCount = followRepository.countFollowersByUser(user);
         
-        return new FollowerCountDto(user.getUserId(), user.getUsername(), followerCount);
+        return followMapper.mapToFollowerCountDto(user, followerCount);
     }
 
     @Override
@@ -116,36 +119,8 @@ public class FollowServiceImpl implements FollowService {
         
         Long followingCount = followRepository.countFollowingByUser(user);
         
-        return new FollowingCountDto(user.getUserId(), user.getUsername(), followingCount);
+        return followMapper.mapToFollowingCountDto(user, followingCount);
     }
 
-    private GetFollowersDto mapFollowToGetFollowersDto(Follow follow) {
-        User follower = follow.getFollower();
-        return new GetFollowersDto(
-                follower.getUserId(),
-                follower.getUsername(),
-                follower.getEmail(),
-                follower.getCreated(),
-                follower.isEnabled(),
-                follow.getFollowedAt(),
-                follow.isActive(),
-                follow.isMuted(),
-                follow.isCloseFriend()
-        );
-    }
 
-    private GetFollowingDto mapFollowToGetFollowingDto(Follow follow) {
-        User following = follow.getFollowing();
-        return new GetFollowingDto(
-                following.getUserId(),
-                following.getUsername(),
-                following.getEmail(),
-                following.getCreated(),
-                following.isEnabled(),
-                follow.getFollowedAt(),
-                follow.isActive(),
-                follow.isMuted(),
-                follow.isCloseFriend()
-        );
-    }
 }

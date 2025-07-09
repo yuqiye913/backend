@@ -10,6 +10,7 @@ import com.programming.techie.springredditclone.model.VoteType;
 import com.programming.techie.springredditclone.repository.PostRepository;
 import com.programming.techie.springredditclone.repository.VoteRepository;
 import com.programming.techie.springredditclone.service.impl.VoteServiceImpl;
+import com.programming.techie.springredditclone.mapper.VoteMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -37,6 +38,9 @@ class VoteServiceTest {
 
     @Mock
     private AuthService authService;
+
+    @Mock
+    private VoteMapper voteMapper;
 
     @InjectMocks
     private VoteServiceImpl voteService;
@@ -81,6 +85,13 @@ class VoteServiceTest {
         when(voteRepository.findByPostAndUser(testPost, testUser)).thenReturn(Optional.empty());
         when(voteRepository.save(any(Vote.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(postRepository.save(any(Post.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        
+        Vote expectedVote = Vote.builder()
+                .voteType(VoteType.UPVOTE)
+                .post(testPost)
+                .user(testUser)
+                .build();
+        when(voteMapper.mapToVote(upvoteDto, testPost, testUser)).thenReturn(expectedVote);
 
         // When
         voteService.vote(upvoteDto);
@@ -99,6 +110,13 @@ class VoteServiceTest {
         when(voteRepository.findByPostAndUser(testPost, testUser)).thenReturn(Optional.empty());
         when(voteRepository.save(any(Vote.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(postRepository.save(any(Post.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        
+        Vote expectedVote = Vote.builder()
+                .voteType(VoteType.DOWNVOTE)
+                .post(testPost)
+                .user(testUser)
+                .build();
+        when(voteMapper.mapToVote(downvoteDto, testPost, testUser)).thenReturn(expectedVote);
 
         // When
         voteService.vote(downvoteDto);

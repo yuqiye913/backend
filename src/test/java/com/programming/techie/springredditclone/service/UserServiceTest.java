@@ -6,6 +6,7 @@ import com.programming.techie.springredditclone.model.UserIntro;
 import com.programming.techie.springredditclone.repository.UserIntroRepository;
 import com.programming.techie.springredditclone.repository.UserRepository;
 import com.programming.techie.springredditclone.service.impl.UserServiceImpl;
+import com.programming.techie.springredditclone.mapper.UserMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -30,6 +31,9 @@ class UserServiceTest {
 
     @Mock
     private UserIntroRepository userIntroRepository;
+
+    @Mock
+    private UserMapper userMapper;
 
     @InjectMocks
     private UserServiceImpl userService;
@@ -59,8 +63,10 @@ class UserServiceTest {
     @DisplayName("Should get user intro when intro exists")
     void shouldGetUserIntroWhenIntroExists() {
         // Given
+        GetIntroDto expectedDto = new GetIntroDto(1L, "testuser", "This is my bio");
         when(userRepository.findById(1L)).thenReturn(Optional.of(testUser));
         when(userIntroRepository.findByUserId(1L)).thenReturn(Optional.of(testUserIntro));
+        when(userMapper.mapToGetIntroDto(testUser, testUserIntro)).thenReturn(expectedDto);
 
         // When
         GetIntroDto result = userService.getUserIntro(1L);
@@ -75,8 +81,10 @@ class UserServiceTest {
     @DisplayName("Should return basic user info when no intro exists")
     void shouldReturnBasicUserInfoWhenNoIntroExists() {
         // Given
+        GetIntroDto expectedDto = new GetIntroDto(1L, "testuser", null);
         when(userRepository.findById(1L)).thenReturn(Optional.of(testUser));
         when(userIntroRepository.findByUserId(1L)).thenReturn(Optional.empty());
+        when(userMapper.mapToGetIntroDto(testUser)).thenReturn(expectedDto);
 
         // When
         GetIntroDto result = userService.getUserIntro(1L);
