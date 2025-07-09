@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.programming.techie.springredditclone.controller.FollowController;
 import com.programming.techie.springredditclone.dto.FollowRequestDto;
 import com.programming.techie.springredditclone.dto.GetFollowersDto;
+import com.programming.techie.springredditclone.dto.GetFollowingDto;
 import com.programming.techie.springredditclone.dto.FollowerCountDto;
 import com.programming.techie.springredditclone.dto.FollowingCountDto;
 import com.programming.techie.springredditclone.service.FollowService;
@@ -48,6 +49,7 @@ class FollowControllerTest {
     private FollowRequestDto validFollowRequest;
     private FollowRequestDto invalidFollowRequest;
     private List<GetFollowersDto> sampleFollowers;
+    private List<GetFollowingDto> sampleFollowing;
     private FollowerCountDto sampleFollowerCount;
     private FollowingCountDto sampleFollowingCount;
 
@@ -67,6 +69,15 @@ class FollowControllerTest {
         GetFollowersDto follower2 = new GetFollowersDto(2L, "follower2", "follower2@example.com", 
             Instant.now(), true, Instant.now(), true, false, false);
         sampleFollowers = Arrays.asList(follower1, follower2);
+
+        // Create sample following
+        GetFollowingDto following1 = new GetFollowingDto(3L, "following1", "following1@example.com", 
+            Instant.now(), true, Instant.now(), true, false, false);
+        GetFollowingDto following2 = new GetFollowingDto(4L, "following2", "following2@example.com", 
+            Instant.now(), true, Instant.now(), true, false, false);
+        GetFollowingDto following3 = new GetFollowingDto(5L, "following3", "following3@example.com", 
+            Instant.now(), true, Instant.now(), true, false, false);
+        sampleFollowing = Arrays.asList(following1, following2, following3);
 
         // Create sample follower count
         sampleFollowerCount = new FollowerCountDto(1L, "testuser", 2L);
@@ -242,6 +253,59 @@ class FollowControllerTest {
         verify(followService).getFollowersByUserId(999L);
     }
 
+    // ========== GET FOLLOWING TESTS ==========
+    @Test
+    @DisplayName("Should get following by user ID")
+    @WithMockUser(username = "testuser")
+    void shouldGetFollowingByUserId() throws Exception {
+        // Given
+        when(followService.getFollowingByUserId(eq(1L))).thenReturn(sampleFollowing);
+
+        // When & Then
+        mockMvc.perform(get("/api/follow/following/1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isArray())
+                .andExpect(jsonPath("$[0].userId").value(3))
+                .andExpect(jsonPath("$[0].username").value("following1"))
+                .andExpect(jsonPath("$[1].userId").value(4))
+                .andExpect(jsonPath("$[1].username").value("following2"))
+                .andExpect(jsonPath("$[2].userId").value(5))
+                .andExpect(jsonPath("$[2].username").value("following3"));
+
+        verify(followService).getFollowingByUserId(1L);
+    }
+
+    @Test
+    @DisplayName("Should return empty list when user is not following anyone")
+    @WithMockUser(username = "testuser")
+    void shouldReturnEmptyListWhenUserIsNotFollowingAnyone() throws Exception {
+        // Given
+        when(followService.getFollowingByUserId(eq(1L))).thenReturn(Arrays.asList());
+
+        // When & Then
+        mockMvc.perform(get("/api/follow/following/1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isArray())
+                .andExpect(jsonPath("$").isEmpty());
+
+        verify(followService).getFollowingByUserId(1L);
+    }
+
+    @Test
+    @DisplayName("Should handle service exception when getting following")
+    @WithMockUser(username = "testuser")
+    void shouldHandleServiceExceptionWhenGettingFollowing() throws Exception {
+        // Given
+        doThrow(new RuntimeException("User not found"))
+                .when(followService).getFollowingByUserId(eq(999L));
+
+        // When & Then
+        mockMvc.perform(get("/api/follow/following/999"))
+                .andExpect(status().isInternalServerError());
+
+        verify(followService).getFollowingByUserId(999L);
+    }
+
     // ========== GET FOLLOWER COUNT TESTS ==========
     @Test
     @DisplayName("Should get follower count by user ID")
@@ -380,6 +444,14 @@ class FollowControllerTest {
     void shouldRequireAuthenticationForGetFollowingCountEndpoint() throws Exception {
         // When & Then
         mockMvc.perform(get("/api/follow/following/count/1"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("Should require authentication for get following endpoint")
+    void shouldRequireAuthenticationForGetFollowingEndpoint() throws Exception {
+        // When & Then
+        mockMvc.perform(get("/api/follow/following/1"))
                 .andExpect(status().isForbidden());
     }
 } 

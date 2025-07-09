@@ -2,6 +2,7 @@ package com.programming.techie.springredditclone.service.matching;
 
 import com.programming.techie.springredditclone.dto.FollowRequestDto;
 import com.programming.techie.springredditclone.dto.GetFollowersDto;
+import com.programming.techie.springredditclone.dto.GetFollowingDto;
 import com.programming.techie.springredditclone.dto.FollowerCountDto;
 import com.programming.techie.springredditclone.dto.FollowingCountDto;
 import com.programming.techie.springredditclone.model.Follow;
@@ -403,5 +404,77 @@ class FollowServiceTest {
 
         // Then
         assertThat(result.getFollowingCount()).isEqualTo(1000L);
+    }
+
+    // ========== GET FOLLOWING TESTS ==========
+    @Test
+    @DisplayName("Should get following by user ID")
+    void shouldGetFollowingByUserId() {
+        // Given
+        when(userRepository.findById(2L)).thenReturn(Optional.of(following));
+        when(followRepository.findActiveFollowingByUser(following)).thenReturn(Arrays.asList(follow2));
+
+        // When
+        List<GetFollowingDto> result = followService.getFollowingByUserId(2L);
+
+        // Then
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getUserId()).isEqualTo(1L);
+        assertThat(result.get(0).getUsername()).isEqualTo("follower");
+        assertThat(result.get(0).getEmail()).isEqualTo("follower@example.com");
+        assertThat(result.get(0).isActive()).isTrue();
+    }
+
+    @Test
+    @DisplayName("Should throw exception when user not found for getting following")
+    void shouldThrowExceptionWhenUserNotFoundForGettingFollowing() {
+        // Given
+        when(userRepository.findById(999L)).thenReturn(Optional.empty());
+
+        // When & Then
+        assertThatThrownBy(() -> followService.getFollowingByUserId(999L))
+                .isInstanceOf(RuntimeException.class);
+    }
+
+    @Test
+    @DisplayName("Should return empty list when user is not following anyone")
+    void shouldReturnEmptyListWhenUserIsNotFollowingAnyone() {
+        // Given
+        when(userRepository.findById(2L)).thenReturn(Optional.of(following));
+        when(followRepository.findActiveFollowingByUser(following)).thenReturn(Arrays.asList());
+
+        // When
+        List<GetFollowingDto> result = followService.getFollowingByUserId(2L);
+
+        // Then
+        assertThat(result).isEmpty();
+    }
+
+    @Test
+    @DisplayName("Should return multiple following")
+    void shouldReturnMultipleFollowing() {
+        // Given
+        User user3 = new User();
+        user3.setUserId(3L);
+        user3.setUsername("user3");
+        user3.setEmail("user3@example.com");
+
+        Follow follow3 = new Follow();
+        follow3.setId(3L);
+        follow3.setFollower(following);
+        follow3.setFollowing(user3);
+        follow3.setFollowedAt(Instant.now());
+        follow3.setActive(true);
+
+        when(userRepository.findById(2L)).thenReturn(Optional.of(following));
+        when(followRepository.findActiveFollowingByUser(following)).thenReturn(Arrays.asList(follow1, follow3));
+
+        // When
+        List<GetFollowingDto> result = followService.getFollowingByUserId(2L);
+
+        // Then
+        assertThat(result).hasSize(2);
+        assertThat(result.get(0).getUserId()).isEqualTo(1L);
+        assertThat(result.get(1).getUserId()).isEqualTo(3L);
     }
 } 

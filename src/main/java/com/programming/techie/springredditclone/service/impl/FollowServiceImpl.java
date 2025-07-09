@@ -2,6 +2,7 @@ package com.programming.techie.springredditclone.service.impl;
 
 import com.programming.techie.springredditclone.dto.FollowRequestDto;
 import com.programming.techie.springredditclone.dto.GetFollowersDto;
+import com.programming.techie.springredditclone.dto.GetFollowingDto;
 import com.programming.techie.springredditclone.dto.FollowerCountDto;
 import com.programming.techie.springredditclone.dto.FollowingCountDto;
 import com.programming.techie.springredditclone.model.Follow;
@@ -87,6 +88,18 @@ public class FollowServiceImpl implements FollowService {
     }
 
     @Override
+    public List<GetFollowingDto> getFollowingByUserId(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        
+        List<Follow> following = followRepository.findActiveFollowingByUser(user);
+        
+        return following.stream()
+                .map(this::mapFollowToGetFollowingDto)
+                .collect(Collectors.toList());
+    }
+
+    @Override
     public FollowerCountDto getFollowerCountByUserId(Long userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
@@ -114,6 +127,21 @@ public class FollowServiceImpl implements FollowService {
                 follower.getEmail(),
                 follower.getCreated(),
                 follower.isEnabled(),
+                follow.getFollowedAt(),
+                follow.isActive(),
+                follow.isMuted(),
+                follow.isCloseFriend()
+        );
+    }
+
+    private GetFollowingDto mapFollowToGetFollowingDto(Follow follow) {
+        User following = follow.getFollowing();
+        return new GetFollowingDto(
+                following.getUserId(),
+                following.getUsername(),
+                following.getEmail(),
+                following.getCreated(),
+                following.isEnabled(),
                 follow.getFollowedAt(),
                 follow.isActive(),
                 follow.isMuted(),
