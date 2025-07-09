@@ -10,9 +10,5 @@ import lombok.NoArgsConstructor;
 public class GetIntroDto {
     private Long userId;
     private String username;
-    private String displayName;
     private String bio;
-    private String tagline;
-    private String profilePictureUrl;
-    private String aboutMe;
 } 
