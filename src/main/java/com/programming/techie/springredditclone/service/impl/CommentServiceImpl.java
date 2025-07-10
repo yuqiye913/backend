@@ -1,6 +1,7 @@
 package com.programming.techie.springredditclone.service.impl;
 
 import com.programming.techie.springredditclone.dto.CommentsDto;
+import com.programming.techie.springredditclone.dto.CursorPageResponse;
 import com.programming.techie.springredditclone.exceptions.PostNotFoundException;
 import com.programming.techie.springredditclone.exceptions.SpringRedditException;
 import com.programming.techie.springredditclone.mapper.CommentMapper;
@@ -15,6 +16,7 @@ import com.programming.techie.springredditclone.service.AuthService;
 import com.programming.techie.springredditclone.service.CommentService;
 import com.programming.techie.springredditclone.service.impl.MailContentBuilder;
 import com.programming.techie.springredditclone.service.MailService;
+import com.programming.techie.springredditclone.util.CursorUtil;
 import lombok.AllArgsConstructor;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
@@ -32,6 +34,7 @@ public class CommentServiceImpl implements CommentService {
     private final CommentRepository commentRepository;
     private final MailContentBuilder mailContentBuilder;
     private final MailService mailService;
+    private final CursorUtil cursorUtil;
 
     @Override
     public void save(CommentsDto commentsDto) {
@@ -40,8 +43,33 @@ public class CommentServiceImpl implements CommentService {
         Comment comment = commentMapper.map(commentsDto, post, authService.getCurrentUser());
         commentRepository.save(comment);
 
+        // Increment comment count for the post
+        post.setCommentCount(post.getCommentCount() + 1);
+        postRepository.save(post);
+
         String message = mailContentBuilder.build(post.getUser().getUsername() + " posted a comment on your post." + POST_URL);
         sendCommentNotification(message, post.getUser());
+    }
+
+    @Override
+    public void deleteComment(Long commentId) {
+        Comment comment = commentRepository.findById(commentId)
+                .orElseThrow(() -> new SpringRedditException("Comment not found with ID: " + commentId));
+        
+        // Check if user is authorized to delete this comment
+        User currentUser = authService.getCurrentUser();
+        if (!comment.getUser().equals(currentUser) && !comment.getPost().getUser().equals(currentUser)) {
+            throw new SpringRedditException("You are not authorized to delete this comment");
+        }
+        
+        // Soft delete the comment
+        comment.setDeleted(true);
+        commentRepository.save(comment);
+        
+        // Decrement comment count for the post
+        Post post = comment.getPost();
+        post.setCommentCount(Math.max(0, post.getCommentCount() - 1)); // Ensure count doesn't go negative
+        postRepository.save(post);
     }
 
     private void sendCommentNotification(String message, User user) {
@@ -54,6 +82,110 @@ public class CommentServiceImpl implements CommentService {
         return commentRepository.findByPost(post)
                 .stream()
                 .map(commentMapper::mapToDto).toList();
+    }
+
+    @Override
+    public CursorPageResponse<CommentsDto> getCommentsForPost(Long postId, String cursor, Integer limit) {
+        // Validate post exists
+        postRepository.findById(postId).orElseThrow(() -> new PostNotFoundException(postId.toString()));
+        
+        // Set default limit if not provided
+        int actualLimit = (limit != null) ? Math.min(limit, 50) : 20; // Max 50, default 20
+        
+        List<Comment> comments;
+        String nextCursor = null;
+        
+        if (cursor == null) {
+            // First page
+            comments = commentRepository.findTopLevelCommentsByPostFirstPage(postId);
+        } else {
+            // Subsequent pages
+            CursorUtil.CursorData cursorData = cursorUtil.decodeCursor(cursor);
+            comments = commentRepository.findTopLevelCommentsByPostWithCursor(postId, cursorData.getId());
+        }
+        
+        // Apply limit and get next cursor
+        if (comments.size() > actualLimit) {
+            comments = comments.subList(0, actualLimit);
+            Comment lastComment = comments.get(actualLimit - 1);
+            nextCursor = cursorUtil.encodeCursor(lastComment.getCreatedDate(), lastComment.getId());
+        }
+        
+        List<CommentsDto> commentDtos = comments.stream()
+                .map(commentMapper::mapToDto)
+                .toList();
+        
+        return new CursorPageResponse<>(commentDtos, nextCursor, nextCursor != null, actualLimit);
+    }
+
+    @Override
+    public CursorPageResponse<CommentsDto> getCommentsForUser(String userName, String cursor, Integer limit) {
+        // Validate user exists
+        userRepository.findByUsername(userName)
+                .orElseThrow(() -> new UsernameNotFoundException(userName));
+        
+        // Set default limit if not provided
+        int actualLimit = (limit != null) ? Math.min(limit, 50) : 20; // Max 50, default 20
+        
+        List<Comment> comments;
+        String nextCursor = null;
+        
+        if (cursor == null) {
+            // First page
+            comments = commentRepository.findCommentsByUserFirstPage(userName);
+        } else {
+            // Subsequent pages
+            CursorUtil.CursorData cursorData = cursorUtil.decodeCursor(cursor);
+            comments = commentRepository.findCommentsByUserWithCursor(userName, cursorData.getId());
+        }
+        
+        // Apply limit and get next cursor
+        if (comments.size() > actualLimit) {
+            comments = comments.subList(0, actualLimit);
+            Comment lastComment = comments.get(actualLimit - 1);
+            nextCursor = cursorUtil.encodeCursor(lastComment.getCreatedDate(), lastComment.getId());
+        }
+        
+        List<CommentsDto> commentDtos = comments.stream()
+                .map(commentMapper::mapToDto)
+                .toList();
+        
+        return new CursorPageResponse<>(commentDtos, nextCursor, nextCursor != null, actualLimit);
+    }
+
+    @Override
+    public CursorPageResponse<CommentsDto> getRepliesForComment(Long commentId, String cursor, Integer limit) {
+        // Validate comment exists
+        commentRepository.findById(commentId)
+                .orElseThrow(() -> new SpringRedditException("Comment not found with ID: " + commentId));
+        
+        // Set default limit if not provided
+        int actualLimit = (limit != null) ? Math.min(limit, 50) : 20; // Max 50, default 20
+        
+        List<Comment> replies;
+        String nextCursor = null;
+        
+        if (cursor == null) {
+            // First page
+            replies = commentRepository.findRepliesByCommentFirstPage(commentId);
+        } else {
+            // Subsequent pages
+            CursorUtil.CursorData cursorData = cursorUtil.decodeCursor(cursor);
+            replies = commentRepository.findRepliesByCommentWithCursor(commentId, cursorData.getId());
+        }
+        
+        // Apply limit and get next cursor
+        if (replies.size() > actualLimit) {
+            replies = replies.subList(0, actualLimit);
+            Comment lastReply = replies.get(actualLimit - 1);
+            nextCursor = cursorUtil.encodeCursor(lastReply.getCreatedDate(), lastReply.getId());
+        }
+        
+        List<CommentsDto> replyDtos = replies.stream()
+                .map(commentMapper::mapToDto)
+                .toList();
+        
+        return new CursorPageResponse<>(replyDtos, nextCursor, nextCursor != null, actualLimit);
     }
 
     @Override

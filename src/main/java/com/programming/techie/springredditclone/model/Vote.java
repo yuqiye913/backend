@@ -16,16 +16,34 @@ import static jakarta.persistence.GenerationType.IDENTITY;
 @NoArgsConstructor
 @Entity
 @Builder
+@Table(name = "votes")
 public class Vote {
     @Id
     @GeneratedValue(strategy = IDENTITY)
     private Long voteId;
+    
+    @Enumerated(EnumType.STRING)
     private VoteType voteType;
-    @NotNull
+    
+    // Vote can be on either a post or a comment (mutually exclusive)
     @ManyToOne(fetch = LAZY)
     @JoinColumn(name = "postId", referencedColumnName = "postId")
     private Post post;
+    
+    @ManyToOne(fetch = LAZY)
+    @JoinColumn(name = "commentId", referencedColumnName = "id")
+    private Comment comment;
+    
     @ManyToOne(fetch = LAZY)
     @JoinColumn(name = "userId", referencedColumnName = "userId")
     private User user;
+    
+    // Ensure vote is on either post or comment, not both
+    @PrePersist
+    @PreUpdate
+    protected void validateVoteTarget() {
+        if ((post == null && comment == null) || (post != null && comment != null)) {
+            throw new IllegalStateException("Vote must be on either a post or a comment, not both or neither");
+        }
+    }
 }

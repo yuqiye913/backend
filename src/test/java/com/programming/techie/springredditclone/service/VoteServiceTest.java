@@ -1,12 +1,15 @@
 package com.programming.techie.springredditclone.service;
 
+import com.programming.techie.springredditclone.dto.CommentVoteRequest;
 import com.programming.techie.springredditclone.dto.VoteDto;
 import com.programming.techie.springredditclone.exceptions.PostNotFoundException;
 import com.programming.techie.springredditclone.exceptions.SpringRedditException;
+import com.programming.techie.springredditclone.model.Comment;
 import com.programming.techie.springredditclone.model.Post;
 import com.programming.techie.springredditclone.model.User;
 import com.programming.techie.springredditclone.model.Vote;
 import com.programming.techie.springredditclone.model.VoteType;
+import com.programming.techie.springredditclone.repository.CommentRepository;
 import com.programming.techie.springredditclone.repository.PostRepository;
 import com.programming.techie.springredditclone.repository.VoteRepository;
 import com.programming.techie.springredditclone.service.impl.VoteServiceImpl;
@@ -37,6 +40,9 @@ class VoteServiceTest {
     private PostRepository postRepository;
 
     @Mock
+    private CommentRepository commentRepository;
+
+    @Mock
     private AuthService authService;
 
     @Mock
@@ -47,8 +53,11 @@ class VoteServiceTest {
 
     private User testUser;
     private Post testPost;
+    private Comment testComment;
     private VoteDto upvoteDto;
     private VoteDto downvoteDto;
+    private CommentVoteRequest commentUpvoteRequest;
+    private CommentVoteRequest commentDownvoteRequest;
 
     @BeforeEach
     void setUp() {
@@ -74,6 +83,25 @@ class VoteServiceTest {
         downvoteDto = new VoteDto();
         downvoteDto.setPostId(1L);
         downvoteDto.setVoteType(VoteType.DOWNVOTE);
+
+        testComment = new Comment();
+        testComment.setId(1L);
+        testComment.setText("Test comment");
+        testComment.setPost(testPost);
+        testComment.setUser(testUser);
+        testComment.setCreatedDate(Instant.now());
+        testComment.setVoteCount(0);
+        testComment.setReplyCount(0);
+
+        commentUpvoteRequest = CommentVoteRequest.builder()
+                .commentId(1L)
+                .voteType(VoteType.UPVOTE)
+                .build();
+
+        commentDownvoteRequest = CommentVoteRequest.builder()
+                .commentId(1L)
+                .voteType(VoteType.DOWNVOTE)
+                .build();
     }
 
     @Test
@@ -213,5 +241,132 @@ class VoteServiceTest {
 
         verify(voteRepository, never()).save(any(Vote.class));
         verify(postRepository, never()).save(any(Post.class));
+    }
+
+    // Comment Voting Tests
+    @Test
+    @DisplayName("Should create new upvote on comment when user hasn't voted before")
+    void shouldCreateNewCommentUpvote() {
+        // Given
+        when(commentRepository.findById(1L)).thenReturn(Optional.of(testComment));
+        when(authService.getCurrentUser()).thenReturn(testUser);
+        when(voteRepository.findByCommentAndUser(testComment, testUser)).thenReturn(Optional.empty());
+        when(voteRepository.save(any(Vote.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(commentRepository.save(any(Comment.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        // When
+        voteService.voteOnComment(commentUpvoteRequest);
+
+        // Then
+        verify(voteRepository).save(any(Vote.class));
+        verify(commentRepository).save(argThat(comment -> comment.getVoteCount() == 1));
+    }
+
+    @Test
+    @DisplayName("Should create new downvote on comment when user hasn't voted before")
+    void shouldCreateNewCommentDownvote() {
+        // Given
+        when(commentRepository.findById(1L)).thenReturn(Optional.of(testComment));
+        when(authService.getCurrentUser()).thenReturn(testUser);
+        when(voteRepository.findByCommentAndUser(testComment, testUser)).thenReturn(Optional.empty());
+        when(voteRepository.save(any(Vote.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(commentRepository.save(any(Comment.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        // When
+        voteService.voteOnComment(commentDownvoteRequest);
+
+        // Then
+        verify(voteRepository).save(any(Vote.class));
+        verify(commentRepository).save(argThat(comment -> comment.getVoteCount() == -1));
+    }
+
+    @Test
+    @DisplayName("Should update existing comment vote from upvote to downvote")
+    void shouldUpdateCommentVoteFromUpvoteToDownvote() {
+        // Given
+        Vote existingVote = Vote.builder()
+                .voteId(1L)
+                .voteType(VoteType.UPVOTE)
+                .comment(testComment)
+                .user(testUser)
+                .build();
+
+        when(commentRepository.findById(1L)).thenReturn(Optional.of(testComment));
+        when(authService.getCurrentUser()).thenReturn(testUser);
+        when(voteRepository.findByCommentAndUser(testComment, testUser)).thenReturn(Optional.of(existingVote));
+        when(voteRepository.save(any(Vote.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(commentRepository.save(any(Comment.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        // When
+        voteService.voteOnComment(commentDownvoteRequest);
+
+        // Then
+        verify(voteRepository).save(any(Vote.class));
+        verify(commentRepository).save(any(Comment.class));
+    }
+
+    @Test
+    @DisplayName("Should throw exception when trying to vote same type on comment again")
+    void shouldThrowExceptionForSameCommentVoteType() {
+        // Given
+        Vote existingVote = Vote.builder()
+                .voteId(1L)
+                .voteType(VoteType.UPVOTE)
+                .comment(testComment)
+                .user(testUser)
+                .build();
+
+        when(commentRepository.findById(1L)).thenReturn(Optional.of(testComment));
+        when(authService.getCurrentUser()).thenReturn(testUser);
+        when(voteRepository.findByCommentAndUser(testComment, testUser)).thenReturn(Optional.of(existingVote));
+
+        // When & Then
+        assertThatThrownBy(() -> voteService.voteOnComment(commentUpvoteRequest))
+                .isInstanceOf(SpringRedditException.class)
+                .hasMessageContaining("You have already UPVOTE'd for this comment");
+
+        verify(voteRepository, never()).save(any(Vote.class));
+        verify(commentRepository, never()).save(any(Comment.class));
+    }
+
+    @Test
+    @DisplayName("Should throw exception when comment not found")
+    void shouldThrowExceptionWhenCommentNotFound() {
+        // Given
+        when(commentRepository.findById(1L)).thenReturn(Optional.empty());
+
+        // When & Then
+        assertThatThrownBy(() -> voteService.voteOnComment(commentUpvoteRequest))
+                .isInstanceOf(SpringRedditException.class)
+                .hasMessageContaining("Comment Not Found with ID - 1");
+
+        verify(voteRepository, never()).save(any(Vote.class));
+        verify(commentRepository, never()).save(any(Comment.class));
+    }
+
+    @Test
+    @DisplayName("Should get comment vote count")
+    void shouldGetCommentVoteCount() {
+        // Given
+        testComment.setVoteCount(5);
+        when(commentRepository.findById(1L)).thenReturn(Optional.of(testComment));
+
+        // When
+        Integer voteCount = voteService.getCommentVoteCount(1L);
+
+        // Then
+        assertThat(voteCount).isEqualTo(5);
+    }
+
+    @Test
+    @DisplayName("Should throw exception when getting vote count for non-existent comment")
+    void shouldThrowExceptionWhenGettingVoteCountForNonExistentComment() {
+        // Given
+        when(commentRepository.findById(1L)).thenReturn(Optional.empty());
+
+        // When & Then
+        assertThatThrownBy(() -> voteService.getCommentVoteCount(1L))
+                .isInstanceOf(SpringRedditException.class)
+                .hasMessageContaining("Comment Not Found with ID - 1");
     }
 } 

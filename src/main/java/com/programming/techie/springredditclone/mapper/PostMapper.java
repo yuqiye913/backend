@@ -62,7 +62,7 @@ public abstract class PostMapper {
     }
 
     Integer commentCount(Post post) {
-        return commentRepository.findByPost(post).size();
+        return post.getCommentCount();
     }
 
     String getDuration(Post post) {
