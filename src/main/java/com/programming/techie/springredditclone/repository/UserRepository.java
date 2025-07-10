@@ -13,6 +13,6 @@ import java.util.Optional;
 public interface UserRepository extends JpaRepository<User, Long> {
     Optional<User> findByUsername(String username);
     
-    @Query("SELECT u FROM User u WHERE u.userId != :currentUserId AND u.enabled = true ORDER BY u.created DESC")
-    List<User> findPotentialMatches(@Param("currentUserId") Long currentUserId, int limit);
+    @Query(value = "SELECT * FROM users u WHERE u.user_id != :currentUserId AND u.enabled = true ORDER BY u.created DESC LIMIT :limit", nativeQuery = true)
+    List<User> findPotentialMatches(@Param("currentUserId") Long currentUserId, @Param("limit") int limit);
 }

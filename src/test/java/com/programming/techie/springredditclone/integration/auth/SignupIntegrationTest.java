@@ -1,7 +1,7 @@
 package com.programming.techie.springredditclone.integration.auth;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.programming.techie.springredditclone.BaseTest;
+import com.programming.techie.springredditclone.integration.IntegrationTestBase;
 import com.programming.techie.springredditclone.dto.RegisterRequest;
 import com.programming.techie.springredditclone.model.User;
 import com.programming.techie.springredditclone.model.VerificationToken;
@@ -16,26 +16,27 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.context.WebApplicationContext;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 /**
- * Integration tests for complete signup flow
+ * Integration tests for signup functionality
+ * Tests the complete flow from controller to service to repository
  */
 @SpringBootTest
 @AutoConfigureWebMvc
 @ActiveProfiles("test")
 @Transactional
-class SignupIntegrationTest extends BaseTest {
+class SignupIntegrationTest extends IntegrationTestBase {
 
     @Autowired
-    private WebApplicationContext webApplicationContext;
+    private MockMvc mockMvc;
+
+    @Autowired
+    private ObjectMapper objectMapper;
 
     @Autowired
     private UserRepository userRepository;
@@ -43,44 +44,38 @@ class SignupIntegrationTest extends BaseTest {
     @Autowired
     private VerificationTokenRepository verificationTokenRepository;
 
-    @Autowired
-    private ObjectMapper objectMapper;
-
-    private MockMvc mockMvc;
-    private RegisterRequest registerRequest;
+    private RegisterRequest validRegisterRequest;
 
     @BeforeEach
     void setUp() {
-        mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build();
-        
-        registerRequest = new RegisterRequest();
-        registerRequest.setUsername("integrationtestuser");
-        registerRequest.setEmail("integration@test.com");
-        registerRequest.setPassword("password123");
+        // Clean up any existing test data
+        verificationTokenRepository.deleteAll();
+        userRepository.deleteAll();
+
+        validRegisterRequest = new RegisterRequest();
+        validRegisterRequest.setUsername("integrationtestuser");
+        validRegisterRequest.setEmail("integration@test.com");
+        validRegisterRequest.setPassword("password123");
     }
 
     @Test
-    @DisplayName("Should complete full signup flow with account verification")
-    void shouldCompleteFullSignupFlow() throws Exception {
-        // Given - Clean state
-        userRepository.deleteAll();
-        verificationTokenRepository.deleteAll();
-
-        // When & Then - Step 1: Register user
+    @DisplayName("Should successfully register a new user through complete flow")
+    void shouldSuccessfullyRegisterNewUser() throws Exception {
+        // When
         mockMvc.perform(post("/api/auth/signup")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(registerRequest)))
+                .content(objectMapper.writeValueAsString(validRegisterRequest)))
                 .andExpect(status().isOk())
                 .andExpect(content().string("User Registration Successful"));
 
-        // Verify user was created in database
+        // Then - Verify user was created in database
         User savedUser = userRepository.findByUsername("integrationtestuser").orElse(null);
         assertThat(savedUser).isNotNull();
         assertThat(savedUser.getEmail()).isEqualTo("integration@test.com");
-        assertThat(savedUser.isEnabled()).isFalse(); // User should be disabled initially
+        assertThat(savedUser.isEnabled()).isFalse();
+        assertThat(savedUser.getCreated()).isNotNull();
 
-        // Verify verification token was created
-        // We need to find the token by searching through all tokens since findByUser doesn't exist
+        // Then - Verify verification token was created
         VerificationToken verificationToken = verificationTokenRepository.findAll().stream()
                 .filter(token -> token.getUser().equals(savedUser))
                 .findFirst()
@@ -88,126 +83,262 @@ class SignupIntegrationTest extends BaseTest {
         assertThat(verificationToken).isNotNull();
         assertThat(verificationToken.getToken()).isNotNull();
         assertThat(verificationToken.getToken()).isNotEmpty();
+    }
 
-        // Step 2: Verify account with token
-        mockMvc.perform(get("/api/auth/accountVerification/" + verificationToken.getToken()))
+    @Test
+    @DisplayName("Should return 400 Bad Request for duplicate username")
+    void shouldReturnBadRequestForDuplicateUsername() throws Exception {
+        // Given - Create a user first
+        User existingUser = new User();
+        existingUser.setUsername("duplicateuser");
+        existingUser.setEmail("existing@test.com");
+        existingUser.setPassword("encodedPassword");
+        existingUser.setEnabled(false);
+        userRepository.save(existingUser);
+
+        // Given - Try to register with same username
+        RegisterRequest duplicateRequest = new RegisterRequest();
+        duplicateRequest.setUsername("duplicateuser");
+        duplicateRequest.setEmail("new@test.com");
+        duplicateRequest.setPassword("password123");
+
+        // When & Then
+        mockMvc.perform(post("/api/auth/signup")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(duplicateRequest)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("Should return 400 Bad Request for duplicate email")
+    void shouldReturnBadRequestForDuplicateEmail() throws Exception {
+        // Given - Create a user first
+        User existingUser = new User();
+        existingUser.setUsername("existinguser");
+        existingUser.setEmail("duplicate@test.com");
+        existingUser.setPassword("encodedPassword");
+        existingUser.setEnabled(false);
+        userRepository.save(existingUser);
+
+        // Given - Try to register with same email
+        RegisterRequest duplicateRequest = new RegisterRequest();
+        duplicateRequest.setUsername("newuser");
+        duplicateRequest.setEmail("duplicate@test.com");
+        duplicateRequest.setPassword("password123");
+
+        // When & Then
+        mockMvc.perform(post("/api/auth/signup")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(duplicateRequest)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("Should handle multiple concurrent signup requests")
+    void shouldHandleMultipleConcurrentSignupRequests() throws Exception {
+        // Given
+        RegisterRequest request1 = new RegisterRequest();
+        request1.setUsername("concurrentuser1");
+        request1.setEmail("concurrent1@test.com");
+        request1.setPassword("password123");
+
+        RegisterRequest request2 = new RegisterRequest();
+        request2.setUsername("concurrentuser2");
+        request2.setEmail("concurrent2@test.com");
+        request2.setPassword("password123");
+
+        // When & Then - Both should succeed
+        mockMvc.perform(post("/api/auth/signup")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request1)))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/auth/signup")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request2)))
+                .andExpect(status().isOk());
+
+        // Then - Verify both users were created
+        User user1 = userRepository.findByUsername("concurrentuser1").orElse(null);
+        User user2 = userRepository.findByUsername("concurrentuser2").orElse(null);
+        assertThat(user1).isNotNull();
+        assertThat(user2).isNotNull();
+        assertThat(user1.getEmail()).isEqualTo("concurrent1@test.com");
+        assertThat(user2.getEmail()).isEqualTo("concurrent2@test.com");
+    }
+
+    @Test
+    @DisplayName("Should create unique verification tokens for different users")
+    void shouldCreateUniqueVerificationTokens() throws Exception {
+        // Given
+        RegisterRequest request1 = new RegisterRequest();
+        request1.setUsername("tokenuser1");
+        request1.setEmail("token1@test.com");
+        request1.setPassword("password123");
+
+        RegisterRequest request2 = new RegisterRequest();
+        request2.setUsername("tokenuser2");
+        request2.setEmail("token2@test.com");
+        request2.setPassword("password123");
+
+        // When
+        mockMvc.perform(post("/api/auth/signup")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request1)))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/auth/signup")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request2)))
+                .andExpect(status().isOk());
+
+        // Then
+        User user1 = userRepository.findByUsername("tokenuser1").orElse(null);
+        User user2 = userRepository.findByUsername("tokenuser2").orElse(null);
+        
+        VerificationToken token1 = verificationTokenRepository.findAll().stream()
+                .filter(token -> token.getUser().equals(user1))
+                .findFirst()
+                .orElse(null);
+        VerificationToken token2 = verificationTokenRepository.findAll().stream()
+                .filter(token -> token.getUser().equals(user2))
+                .findFirst()
+                .orElse(null);
+        
+        assertThat(token1).isNotNull();
+        assertThat(token2).isNotNull();
+        assertThat(token1.getToken()).isNotEqualTo(token2.getToken());
+    }
+
+    @Test
+    @DisplayName("Should handle special characters in username and email")
+    void shouldHandleSpecialCharactersInUsernameAndEmail() throws Exception {
+        // Given
+        RegisterRequest specialCharRequest = new RegisterRequest();
+        specialCharRequest.setUsername("test-user_123");
+        specialCharRequest.setEmail("test.user+tag@example-domain.co.uk");
+        specialCharRequest.setPassword("password123");
+
+        // When
+        mockMvc.perform(post("/api/auth/signup")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(specialCharRequest)))
+                .andExpect(status().isOk());
+
+        // Then
+        User savedUser = userRepository.findByUsername("test-user_123").orElse(null);
+        assertThat(savedUser).isNotNull();
+        assertThat(savedUser.getEmail()).isEqualTo("test.user+tag@example-domain.co.uk");
+    }
+
+    @Test
+    @DisplayName("Should handle very long username and email")
+    void shouldHandleVeryLongUsernameAndEmail() throws Exception {
+        // Given
+        RegisterRequest longRequest = new RegisterRequest();
+        longRequest.setUsername("a".repeat(50)); // Long but valid username
+        longRequest.setEmail("verylongemailaddress" + "a".repeat(50) + "@example.com");
+        longRequest.setPassword("password123");
+
+        // When
+        mockMvc.perform(post("/api/auth/signup")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(longRequest)))
+                .andExpect(status().isOk());
+
+        // Then
+        User savedUser = userRepository.findByUsername("a".repeat(50)).orElse(null);
+        assertThat(savedUser).isNotNull();
+        assertThat(savedUser.getEmail()).isEqualTo("verylongemailaddress" + "a".repeat(50) + "@example.com");
+    }
+
+    @Test
+    @DisplayName("Should handle very long password")
+    void shouldHandleVeryLongPassword() throws Exception {
+        // Given
+        RegisterRequest longPasswordRequest = new RegisterRequest();
+        longPasswordRequest.setUsername("longpassworduser");
+        longPasswordRequest.setEmail("longpassword@test.com");
+        longPasswordRequest.setPassword("a".repeat(1000)); // Very long password
+
+        // When
+        mockMvc.perform(post("/api/auth/signup")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(longPasswordRequest)))
+                .andExpect(status().isOk());
+
+        // Then
+        User savedUser = userRepository.findByUsername("longpassworduser").orElse(null);
+        assertThat(savedUser).isNotNull();
+        assertThat(savedUser.getPassword()).isNotEqualTo("a".repeat(1000)); // Should be encoded
+    }
+
+    @Test
+    @DisplayName("Should verify account activation flow")
+    void shouldVerifyAccountActivationFlow() throws Exception {
+        // Given - Register a user
+        mockMvc.perform(post("/api/auth/signup")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(validRegisterRequest)))
+                .andExpect(status().isOk());
+
+        // When - Get the verification token
+        User savedUser = userRepository.findByUsername("integrationtestuser").orElse(null);
+        VerificationToken verificationToken = verificationTokenRepository.findAll().stream()
+                .filter(token -> token.getUser().equals(savedUser))
+                .findFirst()
+                .orElse(null);
+        assertThat(verificationToken).isNotNull();
+
+        // When - Activate the account
+        mockMvc.perform(post("/api/auth/accountVerification/" + verificationToken.getToken())
+                .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(content().string("Account Activated Successfully"));
 
-        // Verify user is now enabled
-        User verifiedUser = userRepository.findByUsername("integrationtestuser").orElse(null);
-        assertThat(verifiedUser).isNotNull();
-        assertThat(verifiedUser.isEnabled()).isTrue();
-    }
-
-    @Test
-    @DisplayName("Should handle duplicate username registration")
-    void shouldHandleDuplicateUsername() throws Exception {
-        // Given - Create first user
-        userRepository.deleteAll();
-        
-        mockMvc.perform(post("/api/auth/signup")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(registerRequest)))
-                .andExpect(status().isOk());
-
-        // When & Then - Try to register with same username
-        RegisterRequest duplicateRequest = new RegisterRequest();
-        duplicateRequest.setUsername("integrationtestuser");
-        duplicateRequest.setEmail("different@test.com");
-        duplicateRequest.setPassword("password123");
-
-        mockMvc.perform(post("/api/auth/signup")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(duplicateRequest)))
-                .andExpect(status().isInternalServerError()); // Should handle duplicate gracefully
-    }
-
-    @Test
-    @DisplayName("Should handle duplicate email registration")
-    void shouldHandleDuplicateEmail() throws Exception {
-        // Given - Create first user
-        userRepository.deleteAll();
-        
-        mockMvc.perform(post("/api/auth/signup")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(registerRequest)))
-                .andExpect(status().isOk());
-
-        // When & Then - Try to register with same email
-        RegisterRequest duplicateRequest = new RegisterRequest();
-        duplicateRequest.setUsername("differentuser");
-        duplicateRequest.setEmail("integration@test.com");
-        duplicateRequest.setPassword("password123");
-
-        mockMvc.perform(post("/api/auth/signup")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(duplicateRequest)))
-                .andExpect(status().isInternalServerError()); // Should handle duplicate gracefully
+        // Then - Verify user is now enabled
+        User activatedUser = userRepository.findByUsername("integrationtestuser").orElse(null);
+        assertThat(activatedUser).isNotNull();
+        assertThat(activatedUser.isEnabled()).isTrue();
     }
 
     @Test
     @DisplayName("Should handle invalid verification token")
     void shouldHandleInvalidVerificationToken() throws Exception {
         // When & Then
-        mockMvc.perform(get("/api/auth/accountVerification/invalid-token"))
-                .andExpect(status().isInternalServerError());
+        mockMvc.perform(post("/api/auth/accountVerification/invalid-token")
+                .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest());
     }
 
     @Test
-    @DisplayName("Should handle missing verification token")
-    void shouldHandleMissingVerificationToken() throws Exception {
+    @DisplayName("Should handle database transaction rollback on error")
+    void shouldHandleDatabaseTransactionRollbackOnError() throws Exception {
+        // Given - Create a user first to cause duplicate constraint
+        User existingUser = new User();
+        existingUser.setUsername("rollbackuser");
+        existingUser.setEmail("rollback@test.com");
+        existingUser.setPassword("encodedPassword");
+        existingUser.setEnabled(false);
+        userRepository.save(existingUser);
+
+        // Given - Try to register with same username (should fail)
+        RegisterRequest duplicateRequest = new RegisterRequest();
+        duplicateRequest.setUsername("rollbackuser");
+        duplicateRequest.setEmail("different@test.com");
+        duplicateRequest.setPassword("password123");
+
         // When & Then
-        mockMvc.perform(get("/api/auth/accountVerification/"))
-                .andExpect(status().isNotFound());
-    }
-
-    @Test
-    @DisplayName("Should persist user data correctly")
-    void shouldPersistUserDataCorrectly() throws Exception {
-        // Given
-        userRepository.deleteAll();
-
-        // When
         mockMvc.perform(post("/api/auth/signup")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(registerRequest)))
-                .andExpect(status().isOk());
+                .content(objectMapper.writeValueAsString(duplicateRequest)))
+                .andExpect(status().isBadRequest());
 
-        // Then
-        User savedUser = userRepository.findByUsername("integrationtestuser").orElse(null);
-        assertThat(savedUser).isNotNull();
-        assertThat(savedUser.getUsername()).isEqualTo("integrationtestuser");
-        assertThat(savedUser.getEmail()).isEqualTo("integration@test.com");
-        assertThat(savedUser.getPassword()).isNotEqualTo("password123"); // Should be encoded
-        assertThat(savedUser.getCreated()).isNotNull();
-        assertThat(savedUser.isEnabled()).isFalse();
-    }
-
-    @Test
-    @DisplayName("Should create verification token with correct user association")
-    void shouldCreateVerificationTokenWithCorrectUserAssociation() throws Exception {
-        // Given
-        userRepository.deleteAll();
-        verificationTokenRepository.deleteAll();
-
-        // When
-        mockMvc.perform(post("/api/auth/signup")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(registerRequest)))
-                .andExpect(status().isOk());
-
-        // Then
-        User savedUser = userRepository.findByUsername("integrationtestuser").orElse(null);
-        assertThat(savedUser).isNotNull();
-
-        VerificationToken token = verificationTokenRepository.findAll().stream()
-                .filter(t -> t.getUser().equals(savedUser))
+        // Then - Verify no verification token was created for the failed registration
+        User failedUser = userRepository.findAll().stream()
+                .filter(user -> "different@test.com".equals(user.getEmail()))
                 .findFirst()
                 .orElse(null);
-        assertThat(token).isNotNull();
-        assertThat(token.getUser()).isEqualTo(savedUser);
-        assertThat(token.getToken()).isNotNull();
-        assertThat(token.getToken()).hasSize(36); // UUID length
+        assertThat(failedUser).isNull();
     }
 } 

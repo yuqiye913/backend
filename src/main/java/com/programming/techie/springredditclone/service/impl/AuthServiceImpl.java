@@ -45,6 +45,35 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public void signup(RegisterRequest registerRequest) {
+        // Validate input parameters
+        if (registerRequest == null) {
+            throw new IllegalArgumentException("RegisterRequest cannot be null");
+        }
+        
+        if (registerRequest.getUsername() == null) {
+            throw new IllegalArgumentException("Username cannot be null");
+        }
+        
+        if (registerRequest.getUsername().trim().isEmpty()) {
+            throw new IllegalArgumentException("Username cannot be empty");
+        }
+        
+        if (registerRequest.getEmail() == null) {
+            throw new IllegalArgumentException("Email cannot be null");
+        }
+        
+        if (registerRequest.getEmail().trim().isEmpty()) {
+            throw new IllegalArgumentException("Email cannot be empty");
+        }
+        
+        if (registerRequest.getPassword() == null) {
+            throw new IllegalArgumentException("Password cannot be null");
+        }
+        
+        if (registerRequest.getPassword().trim().isEmpty()) {
+            throw new IllegalArgumentException("Password cannot be empty");
+        }
+
         User user = new User();
         user.setUsername(registerRequest.getUsername());
         user.setEmail(registerRequest.getEmail());
