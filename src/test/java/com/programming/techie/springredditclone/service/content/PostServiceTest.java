@@ -11,6 +11,10 @@ import com.programming.techie.springredditclone.repository.SubredditRepository;
 import com.programming.techie.springredditclone.repository.UserRepository;
 import com.programming.techie.springredditclone.service.AuthService;
 import com.programming.techie.springredditclone.service.impl.PostServiceImpl;
+import com.programming.techie.springredditclone.repository.VoteRepository;
+import com.programming.techie.springredditclone.model.Vote;
+import com.programming.techie.springredditclone.model.VoteType;
+import com.programming.techie.springredditclone.service.BlockService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -50,6 +54,12 @@ class PostServiceTest {
 
     @Mock
     private PostMapper postMapper;
+
+    @Mock
+    private VoteRepository voteRepository;
+
+    @Mock
+    private BlockService blockService;
 
     @InjectMocks
     private PostServiceImpl postService;
@@ -202,8 +212,8 @@ class PostServiceTest {
     }
 
     @Test
-    @DisplayName("Should get post by ID successfully")
-    void shouldGetPostById() {
+    @DisplayName("Should get post by ID successfully without vote status when not authenticated")
+    void shouldGetPostByIdWithoutVoteStatusWhenNotAuthenticated() {
         // Given
         Post post = new Post();
         post.setPostId(1L);
@@ -216,14 +226,88 @@ class PostServiceTest {
 
         when(postRepository.findById(1L)).thenReturn(Optional.of(post));
         when(postMapper.mapToDto(post)).thenReturn(expectedResponse);
+        when(authService.isLoggedIn()).thenReturn(false);
 
         // When
         PostResponse result = postService.getPost(1L);
 
         // Then
         assertThat(result).isEqualTo(expectedResponse);
+        assertThat(result.isUpVote()).isFalse();
+        assertThat(result.isDownVote()).isFalse();
         verify(postRepository).findById(1L);
         verify(postMapper).mapToDto(post);
+        verify(authService).isLoggedIn();
+        verify(authService, never()).getCurrentUser();
+    }
+
+    @Test
+    @DisplayName("Should get post by ID successfully with vote status when authenticated")
+    void shouldGetPostByIdWithVoteStatusWhenAuthenticated() {
+        // Given
+        Post post = new Post();
+        post.setPostId(1L);
+        post.setPostName("Test Post");
+        post.setSubreddits(Set.of(programmingSubreddit));
+
+        PostResponse expectedResponse = new PostResponse();
+        expectedResponse.setId(1L);
+        expectedResponse.setPostName("Test Post");
+
+        Vote upvote = new Vote();
+        upvote.setVoteType(VoteType.UPVOTE);
+
+        when(postRepository.findById(1L)).thenReturn(Optional.of(post));
+        when(postMapper.mapToDto(post)).thenReturn(expectedResponse);
+        when(authService.isLoggedIn()).thenReturn(true);
+        when(authService.getCurrentUser()).thenReturn(testUser);
+        when(voteRepository.findByPostAndUser(post, testUser)).thenReturn(Optional.of(upvote));
+
+        // When
+        PostResponse result = postService.getPost(1L);
+
+        // Then
+        assertThat(result).isEqualTo(expectedResponse);
+        assertThat(result.isUpVote()).isTrue();
+        assertThat(result.isDownVote()).isFalse();
+        verify(postRepository).findById(1L);
+        verify(postMapper).mapToDto(post);
+        verify(authService).isLoggedIn();
+        verify(authService).getCurrentUser();
+        verify(voteRepository, times(2)).findByPostAndUser(post, testUser); // Called twice: once for upvote, once for downvote
+    }
+
+    @Test
+    @DisplayName("Should get post by ID successfully with no vote status when authenticated but no vote")
+    void shouldGetPostByIdWithNoVoteStatusWhenAuthenticatedButNoVote() {
+        // Given
+        Post post = new Post();
+        post.setPostId(1L);
+        post.setPostName("Test Post");
+        post.setSubreddits(Set.of(programmingSubreddit));
+
+        PostResponse expectedResponse = new PostResponse();
+        expectedResponse.setId(1L);
+        expectedResponse.setPostName("Test Post");
+
+        when(postRepository.findById(1L)).thenReturn(Optional.of(post));
+        when(postMapper.mapToDto(post)).thenReturn(expectedResponse);
+        when(authService.isLoggedIn()).thenReturn(true);
+        when(authService.getCurrentUser()).thenReturn(testUser);
+        when(voteRepository.findByPostAndUser(post, testUser)).thenReturn(Optional.empty());
+
+        // When
+        PostResponse result = postService.getPost(1L);
+
+        // Then
+        assertThat(result).isEqualTo(expectedResponse);
+        assertThat(result.isUpVote()).isFalse();
+        assertThat(result.isDownVote()).isFalse();
+        verify(postRepository).findById(1L);
+        verify(postMapper).mapToDto(post);
+        verify(authService).isLoggedIn();
+        verify(authService).getCurrentUser();
+        verify(voteRepository, times(2)).findByPostAndUser(post, testUser); // Called twice: once for upvote, once for downvote
     }
 
     @Test

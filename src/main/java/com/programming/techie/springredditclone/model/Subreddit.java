@@ -8,6 +8,7 @@ import lombok.NoArgsConstructor;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Set;
 
 import static jakarta.persistence.FetchType.LAZY;
 import static jakarta.persistence.GenerationType.IDENTITY;
@@ -23,8 +24,8 @@ public class Subreddit {
     private Long id;
     private String name;
     private String description;
-    @OneToMany(fetch = LAZY)
-    private List<Post> posts;
+    @ManyToMany(mappedBy = "subreddits", fetch = LAZY)
+    private Set<Post> posts;
     private Instant createdDate;
     @ManyToOne(fetch = LAZY)
     private User user;

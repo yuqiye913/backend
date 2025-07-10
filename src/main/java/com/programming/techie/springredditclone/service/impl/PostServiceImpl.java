@@ -15,6 +15,9 @@ import com.programming.techie.springredditclone.service.AuthService;
 import com.programming.techie.springredditclone.service.BlockService;
 import com.programming.techie.springredditclone.service.PostService;
 import com.programming.techie.springredditclone.util.CursorUtil;
+import com.programming.techie.springredditclone.repository.VoteRepository;
+import com.programming.techie.springredditclone.model.Vote;
+import com.programming.techie.springredditclone.model.VoteType;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
@@ -40,6 +43,7 @@ public class PostServiceImpl implements PostService {
     private final BlockService blockService;
     private final PostMapper postMapper;
     private final CursorUtil cursorUtil;
+    private final VoteRepository voteRepository;
 
     @Override
     public void save(PostRequest postRequest) {
@@ -92,7 +96,17 @@ public class PostServiceImpl implements PostService {
     public PostResponse getPost(Long id) {
         Post post = postRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Post not found with id - " + id));
-        return postMapper.mapToDto(post);
+        
+        PostResponse response = postMapper.mapToDto(post);
+        
+        // Add vote status if user is authenticated
+        if (authService.isLoggedIn()) {
+            User currentUser = authService.getCurrentUser();
+            response.setUpVote(isPostUpVoted(post, currentUser));
+            response.setDownVote(isPostDownVoted(post, currentUser));
+        }
+        
+        return response;
     }
 
     @Override
@@ -268,5 +282,19 @@ public class PostServiceImpl implements PostService {
         
         // Delete the post
         postRepository.delete(existingPost);
+    }
+    
+    private boolean isPostUpVoted(Post post, User user) {
+        return checkVoteType(post, user, VoteType.UPVOTE);
+    }
+    
+    private boolean isPostDownVoted(Post post, User user) {
+        return checkVoteType(post, user, VoteType.DOWNVOTE);
+    }
+    
+    private boolean checkVoteType(Post post, User user, VoteType voteType) {
+        return voteRepository.findByPostAndUser(post, user)
+                .map(vote -> vote.getVoteType().equals(voteType))
+                .orElse(false);
     }
 } 

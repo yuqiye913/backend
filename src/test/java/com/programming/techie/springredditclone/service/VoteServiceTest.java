@@ -15,6 +15,7 @@ import com.programming.techie.springredditclone.repository.VoteRepository;
 import com.programming.techie.springredditclone.event.PostLikedEvent;
 import com.programming.techie.springredditclone.service.impl.VoteServiceImpl;
 import com.programming.techie.springredditclone.mapper.VoteMapper;
+import com.programming.techie.springredditclone.service.BlockService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -33,6 +34,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.lenient;
 
 @ExtendWith(MockitoExtension.class)
 class VoteServiceTest {
@@ -54,6 +56,9 @@ class VoteServiceTest {
 
     @Mock
     private ApplicationEventPublisher eventPublisher;
+
+    @Mock
+    private BlockService blockService;
 
     @Captor
     private ArgumentCaptor<PostLikedEvent> eventCaptor;
@@ -118,6 +123,10 @@ class VoteServiceTest {
                 .commentId(1L)
                 .voteType(VoteType.DOWNVOTE)
                 .build();
+        
+        // Setup BlockService mocks to allow voting by default
+        lenient().when(blockService.isBlockedByUser(any(Long.class))).thenReturn(false);
+        lenient().when(blockService.hasBlockedUser(any(Long.class))).thenReturn(false);
     }
 
     @Test
