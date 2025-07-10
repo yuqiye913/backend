@@ -3,6 +3,7 @@ package com.programming.techie.springredditclone.service.impl;
 import com.programming.techie.springredditclone.dto.CursorPageResponse;
 import com.programming.techie.springredditclone.dto.PostRequest;
 import com.programming.techie.springredditclone.dto.PostResponse;
+import com.programming.techie.springredditclone.exceptions.SpringRedditException;
 import com.programming.techie.springredditclone.mapper.PostMapper;
 import com.programming.techie.springredditclone.model.Post;
 import com.programming.techie.springredditclone.model.Subreddit;
@@ -11,6 +12,7 @@ import com.programming.techie.springredditclone.repository.PostRepository;
 import com.programming.techie.springredditclone.repository.SubredditRepository;
 import com.programming.techie.springredditclone.repository.UserRepository;
 import com.programming.techie.springredditclone.service.AuthService;
+import com.programming.techie.springredditclone.service.BlockService;
 import com.programming.techie.springredditclone.service.PostService;
 import com.programming.techie.springredditclone.util.CursorUtil;
 import lombok.AllArgsConstructor;
@@ -35,6 +37,7 @@ public class PostServiceImpl implements PostService {
     private final SubredditRepository subredditRepository;
     private final UserRepository userRepository;
     private final AuthService authService;
+    private final BlockService blockService;
     private final PostMapper postMapper;
     private final CursorUtil cursorUtil;
 
@@ -164,6 +167,13 @@ public class PostServiceImpl implements PostService {
     public CursorPageResponse<PostResponse> getPostsByUsername(String username, String cursor, int limit) {
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new RuntimeException("User not found with username - " + username));
+        
+        User currentUser = authService.getCurrentUser();
+        
+        // Check if current user is blocked by target user or has blocked target user
+        if (blockService.isBlockedByUser(user.getUserId()) || blockService.hasBlockedUser(user.getUserId())) {
+            throw new SpringRedditException("Cannot view posts due to block restrictions");
+        }
         
         Instant createdDate = Instant.now();
         Long postId = Long.MAX_VALUE;

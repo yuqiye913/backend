@@ -12,15 +12,19 @@ import com.programming.techie.springredditclone.model.VoteType;
 import com.programming.techie.springredditclone.repository.CommentRepository;
 import com.programming.techie.springredditclone.repository.PostRepository;
 import com.programming.techie.springredditclone.repository.VoteRepository;
+import com.programming.techie.springredditclone.event.PostLikedEvent;
 import com.programming.techie.springredditclone.service.impl.VoteServiceImpl;
 import com.programming.techie.springredditclone.mapper.VoteMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Captor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.time.Instant;
 import java.util.Optional;
@@ -48,10 +52,17 @@ class VoteServiceTest {
     @Mock
     private VoteMapper voteMapper;
 
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
+
+    @Captor
+    private ArgumentCaptor<PostLikedEvent> eventCaptor;
+
     @InjectMocks
     private VoteServiceImpl voteService;
 
     private User testUser;
+    private User postOwner;
     private Post testPost;
     private Comment testComment;
     private VoteDto upvoteDto;
@@ -67,14 +78,19 @@ class VoteServiceTest {
         testUser.setEmail("test@example.com");
         testUser.setEnabled(true);
 
-        testPost = Post.builder()
-                .postId(1L)
-                .postName("Test Post")
-                .description("Test Description")
-                .voteCount(0)
-                .user(testUser)
-                .createdDate(Instant.now())
-                .build();
+        postOwner = new User();
+        postOwner.setUserId(2L);
+        postOwner.setUsername("postowner");
+        postOwner.setEmail("owner@example.com");
+        postOwner.setEnabled(true);
+
+        testPost = new Post();
+        testPost.setPostId(1L);
+        testPost.setPostName("Test Post");
+        testPost.setDescription("Test Description");
+        testPost.setVoteCount(0);
+        testPost.setUser(postOwner); // Different user owns the post
+        testPost.setCreatedDate(Instant.now());
 
         upvoteDto = new VoteDto();
         upvoteDto.setPostId(1L);
@@ -127,6 +143,45 @@ class VoteServiceTest {
         // Then
         verify(voteRepository).save(any(Vote.class));
         verify(postRepository).save(argThat(post -> post.getVoteCount() == 1));
+        verify(eventPublisher).publishEvent(eventCaptor.capture());
+        
+        PostLikedEvent capturedEvent = eventCaptor.getValue();
+        assertThat(capturedEvent.getActor()).isEqualTo(testUser);
+        assertThat(capturedEvent.getRecipient()).isEqualTo(postOwner); // Post owner should be recipient
+        assertThat(capturedEvent.getPost()).isEqualTo(testPost);
+        assertThat(capturedEvent.getPostId()).isEqualTo(1L);
+    }
+
+    @Test
+    @DisplayName("Should publish event when user likes someone else's post")
+    void shouldPublishEventWhenLikingOthersPost() {
+        // Given
+        when(postRepository.findById(1L)).thenReturn(Optional.of(testPost));
+        when(authService.getCurrentUser()).thenReturn(testUser);
+        when(voteRepository.findByPostAndUser(testPost, testUser)).thenReturn(Optional.empty());
+        when(voteRepository.save(any(Vote.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(postRepository.save(any(Post.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        
+        Vote expectedVote = Vote.builder()
+                .voteType(VoteType.UPVOTE)
+                .post(testPost)
+                .user(testUser)
+                .build();
+        when(voteMapper.mapToVote(upvoteDto, testPost, testUser)).thenReturn(expectedVote);
+
+        // When
+        voteService.vote(upvoteDto);
+
+        // Then
+        verify(voteRepository).save(any(Vote.class));
+        verify(postRepository).save(argThat(post -> post.getVoteCount() == 1));
+        verify(eventPublisher).publishEvent(eventCaptor.capture());
+        
+        PostLikedEvent capturedEvent = eventCaptor.getValue();
+        assertThat(capturedEvent.getActor()).isEqualTo(testUser);
+        assertThat(capturedEvent.getRecipient()).isEqualTo(postOwner);
+        assertThat(capturedEvent.getPost()).isEqualTo(testPost);
+        assertThat(capturedEvent.getPostId()).isEqualTo(1L);
     }
 
     @Test
@@ -152,6 +207,8 @@ class VoteServiceTest {
         // Then
         verify(voteRepository).save(any(Vote.class));
         verify(postRepository).save(argThat(post -> post.getVoteCount() == -1));
+        // Downvotes should not publish events
+        verify(eventPublisher, never()).publishEvent(any(PostLikedEvent.class));
     }
 
     @Test

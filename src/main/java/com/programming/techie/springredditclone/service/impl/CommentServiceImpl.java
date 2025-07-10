@@ -12,12 +12,14 @@ import com.programming.techie.springredditclone.model.User;
 import com.programming.techie.springredditclone.repository.CommentRepository;
 import com.programming.techie.springredditclone.repository.PostRepository;
 import com.programming.techie.springredditclone.repository.UserRepository;
+import com.programming.techie.springredditclone.event.PostCommentedEvent;
 import com.programming.techie.springredditclone.service.AuthService;
+import com.programming.techie.springredditclone.service.BlockService;
 import com.programming.techie.springredditclone.service.CommentService;
-import com.programming.techie.springredditclone.service.impl.MailContentBuilder;
-import com.programming.techie.springredditclone.service.MailService;
+import com.programming.techie.springredditclone.service.NotificationService;
 import com.programming.techie.springredditclone.util.CursorUtil;
 import lombok.AllArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 
@@ -32,23 +34,33 @@ public class CommentServiceImpl implements CommentService {
     private final AuthService authService;
     private final CommentMapper commentMapper;
     private final CommentRepository commentRepository;
-    private final MailContentBuilder mailContentBuilder;
-    private final MailService mailService;
+    private final NotificationService notificationService;
+    private final BlockService blockService;
     private final CursorUtil cursorUtil;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Override
     public void save(CommentsDto commentsDto) {
         Post post = postRepository.findById(commentsDto.getPostId())
                 .orElseThrow(() -> new PostNotFoundException(commentsDto.getPostId().toString()));
-        Comment comment = commentMapper.map(commentsDto, post, authService.getCurrentUser());
+        
+        User currentUser = authService.getCurrentUser();
+        User postOwner = post.getUser();
+        
+        // Check if current user is blocked by post owner or has blocked post owner
+        if (blockService.isBlockedByUser(postOwner.getUserId()) || blockService.hasBlockedUser(postOwner.getUserId())) {
+            throw new SpringRedditException("Cannot comment on this post due to block restrictions");
+        }
+        
+        Comment comment = commentMapper.map(commentsDto, post, currentUser);
         commentRepository.save(comment);
 
         // Increment comment count for the post
         post.setCommentCount(post.getCommentCount() + 1);
         postRepository.save(post);
 
-        String message = mailContentBuilder.build(post.getUser().getUsername() + " posted a comment on your post." + POST_URL);
-        sendCommentNotification(message, post.getUser());
+        // Publish comment event for notification
+        eventPublisher.publishEvent(new PostCommentedEvent(this, comment.getUser(), post.getUser(), post, comment));
     }
 
     @Override
@@ -72,15 +84,20 @@ public class CommentServiceImpl implements CommentService {
         postRepository.save(post);
     }
 
-    private void sendCommentNotification(String message, User user) {
-        mailService.sendMail(new NotificationEmail(user.getUsername() + " Commented on your post", user.getEmail(), message));
-    }
+
 
     @Override
     public List<CommentsDto> getAllCommentsForPost(Long postId) {
         Post post = postRepository.findById(postId).orElseThrow(() -> new PostNotFoundException(postId.toString()));
+        User currentUser = authService.getCurrentUser();
+        
         return commentRepository.findByPost(post)
                 .stream()
+                .filter(comment -> {
+                    // Filter out comments from blocked users or users who blocked current user
+                    return !blockService.hasBlockedUser(comment.getUser().getUserId()) && 
+                           !blockService.isBlockedByUser(comment.getUser().getUserId());
+                })
                 .map(commentMapper::mapToDto).toList();
     }
 

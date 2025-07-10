@@ -111,4 +111,11 @@ public interface MatchRepository extends JpaRepository<Match, Long> {
     // Find matches that have met in person
     @Query("SELECT m FROM Match m WHERE m.user = :user AND m.hasMetInPerson = true ORDER BY m.lastInteractionAt DESC")
     List<Match> findMatchesMetInPerson(@Param("user") User user);
+    
+    // Additional count queries
+    @Query("SELECT COUNT(m) FROM Match m WHERE m.user = :user")
+    Long countByUser(@Param("user") User user);
+    
+    @Query("SELECT COUNT(m) FROM Match m WHERE m.user = :user AND m.matchStatus = :status")
+    Long countByUserAndMatchStatus(@Param("user") User user, @Param("status") String status);
 } 

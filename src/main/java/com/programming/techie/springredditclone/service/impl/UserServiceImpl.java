@@ -5,6 +5,8 @@ import com.programming.techie.springredditclone.model.User;
 import com.programming.techie.springredditclone.model.UserIntro;
 import com.programming.techie.springredditclone.repository.UserIntroRepository;
 import com.programming.techie.springredditclone.repository.UserRepository;
+import com.programming.techie.springredditclone.service.AuthService;
+import com.programming.techie.springredditclone.service.BlockService;
 import com.programming.techie.springredditclone.service.UserService;
 import com.programming.techie.springredditclone.mapper.UserMapper;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,12 +19,17 @@ public class UserServiceImpl implements UserService {
     
     private final UserRepository userRepository;
     private final UserIntroRepository userIntroRepository;
+    private final AuthService authService;
+    private final BlockService blockService;
     private final UserMapper userMapper;
 
     @Autowired
-    public UserServiceImpl(UserRepository userRepository, UserIntroRepository userIntroRepository, UserMapper userMapper) {
+    public UserServiceImpl(UserRepository userRepository, UserIntroRepository userIntroRepository, 
+                          AuthService authService, BlockService blockService, UserMapper userMapper) {
         this.userRepository = userRepository;
         this.userIntroRepository = userIntroRepository;
+        this.authService = authService;
+        this.blockService = blockService;
         this.userMapper = userMapper;
     }
 
@@ -30,6 +37,13 @@ public class UserServiceImpl implements UserService {
     public GetIntroDto getUserIntro(Long userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
+        
+        User currentUser = authService.getCurrentUser();
+        
+        // Check if current user is blocked by target user or has blocked target user
+        if (blockService.isBlockedByUser(userId) || blockService.hasBlockedUser(userId)) {
+            throw new RuntimeException("Cannot view user profile due to block restrictions");
+        }
         
         Optional<UserIntro> userIntroOpt = userIntroRepository.findByUserId(userId);
         

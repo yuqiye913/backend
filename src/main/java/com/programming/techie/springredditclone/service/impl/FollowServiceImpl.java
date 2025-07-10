@@ -5,14 +5,17 @@ import com.programming.techie.springredditclone.dto.GetFollowersDto;
 import com.programming.techie.springredditclone.dto.GetFollowingDto;
 import com.programming.techie.springredditclone.dto.FollowerCountDto;
 import com.programming.techie.springredditclone.dto.FollowingCountDto;
+import com.programming.techie.springredditclone.event.UserFollowedEvent;
 import com.programming.techie.springredditclone.model.Follow;
 import com.programming.techie.springredditclone.model.User;
 import com.programming.techie.springredditclone.repository.FollowRepository;
 import com.programming.techie.springredditclone.repository.UserRepository;
 import com.programming.techie.springredditclone.service.AuthService;
+import com.programming.techie.springredditclone.service.BlockService;
 import com.programming.techie.springredditclone.service.FollowService;
 import com.programming.techie.springredditclone.mapper.FollowMapper;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -20,19 +23,14 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
+@RequiredArgsConstructor
 public class FollowServiceImpl implements FollowService {
     private final FollowRepository followRepository;
     private final UserRepository userRepository;
     private final AuthService authService;
+    private final BlockService blockService;
     private final FollowMapper followMapper;
-
-    @Autowired
-    public FollowServiceImpl(FollowRepository followRepository, UserRepository userRepository, AuthService authService, FollowMapper followMapper) {
-        this.followRepository = followRepository;
-        this.userRepository = userRepository;
-        this.authService = authService;
-        this.followMapper = followMapper;
-    }
+    private final ApplicationEventPublisher eventPublisher;
 
     @Override
     public void followUser(FollowRequestDto followRequest) {
@@ -49,11 +47,19 @@ public class FollowServiceImpl implements FollowService {
             throw new RuntimeException("You cannot follow yourself");
         }
 
+        // Check if users are blocked
+        if (blockService.hasBlockedUser(following.getUserId()) || blockService.isBlockedByUser(following.getUserId())) {
+            throw new RuntimeException("Cannot follow user due to block restrictions");
+        }
+
         Follow follow = new Follow();
         follow.setFollower(follower);
         follow.setFollowing(following);
         follow.setActive(true);
         followRepository.save(follow);
+        
+        // Publish follow event for notification
+        eventPublisher.publishEvent(new UserFollowedEvent(this, follower, following));
     }
 
     @Override
@@ -83,6 +89,13 @@ public class FollowServiceImpl implements FollowService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
         
+        User currentUser = authService.getCurrentUser();
+        
+        // Check if current user is blocked by target user or has blocked target user
+        if (blockService.isBlockedByUser(userId) || blockService.hasBlockedUser(userId)) {
+            throw new RuntimeException("Cannot view followers due to block restrictions");
+        }
+        
         List<Follow> followers = followRepository.findActiveFollowersByUser(user);
         
         return followers.stream()
@@ -94,6 +107,13 @@ public class FollowServiceImpl implements FollowService {
     public List<GetFollowingDto> getFollowingByUserId(Long userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
+        
+        User currentUser = authService.getCurrentUser();
+        
+        // Check if current user is blocked by target user or has blocked target user
+        if (blockService.isBlockedByUser(userId) || blockService.hasBlockedUser(userId)) {
+            throw new RuntimeException("Cannot view following due to block restrictions");
+        }
         
         List<Follow> following = followRepository.findActiveFollowingByUser(user);
         
@@ -107,6 +127,13 @@ public class FollowServiceImpl implements FollowService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
         
+        User currentUser = authService.getCurrentUser();
+        
+        // Check if current user is blocked by target user or has blocked target user
+        if (blockService.isBlockedByUser(userId) || blockService.hasBlockedUser(userId)) {
+            throw new RuntimeException("Cannot view follower count due to block restrictions");
+        }
+        
         Long followerCount = followRepository.countFollowersByUser(user);
         
         return followMapper.mapToFollowerCountDto(user, followerCount);
@@ -116,6 +143,13 @@ public class FollowServiceImpl implements FollowService {
     public FollowingCountDto getFollowingCountByUserId(Long userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
+        
+        User currentUser = authService.getCurrentUser();
+        
+        // Check if current user is blocked by target user or has blocked target user
+        if (blockService.isBlockedByUser(userId) || blockService.hasBlockedUser(userId)) {
+            throw new RuntimeException("Cannot view following count due to block restrictions");
+        }
         
         Long followingCount = followRepository.countFollowingByUser(user);
         

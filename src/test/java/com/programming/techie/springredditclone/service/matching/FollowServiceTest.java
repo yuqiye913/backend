@@ -5,11 +5,13 @@ import com.programming.techie.springredditclone.dto.GetFollowersDto;
 import com.programming.techie.springredditclone.dto.GetFollowingDto;
 import com.programming.techie.springredditclone.dto.FollowerCountDto;
 import com.programming.techie.springredditclone.dto.FollowingCountDto;
+import com.programming.techie.springredditclone.mapper.FollowMapper;
 import com.programming.techie.springredditclone.model.Follow;
 import com.programming.techie.springredditclone.model.User;
 import com.programming.techie.springredditclone.repository.FollowRepository;
 import com.programming.techie.springredditclone.repository.UserRepository;
 import com.programming.techie.springredditclone.service.AuthService;
+import com.programming.techie.springredditclone.event.UserFollowedEvent;
 import com.programming.techie.springredditclone.service.impl.FollowServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -20,6 +22,7 @@ import org.mockito.Captor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.time.Instant;
 import java.util.Arrays;
@@ -42,6 +45,15 @@ class FollowServiceTest {
 
     @Mock
     private AuthService authService;
+
+    @Mock
+    private FollowMapper followMapper;
+
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
+
+    @Captor
+    private ArgumentCaptor<UserFollowedEvent> eventCaptor;
 
     @InjectMocks
     private FollowServiceImpl followService;
@@ -118,6 +130,12 @@ class FollowServiceTest {
         assertThat(savedFollow.getFollower()).isEqualTo(follower);
         assertThat(savedFollow.getFollowing()).isEqualTo(following);
         assertThat(savedFollow.isActive()).isTrue();
+        
+        // Verify event was published
+        verify(eventPublisher).publishEvent(eventCaptor.capture());
+        UserFollowedEvent capturedEvent = eventCaptor.getValue();
+        assertThat(capturedEvent.getActor()).isEqualTo(follower);
+        assertThat(capturedEvent.getRecipient()).isEqualTo(following);
     }
 
     @Test

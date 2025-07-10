@@ -15,13 +15,16 @@ import com.programming.techie.springredditclone.repository.PostRepository;
 import com.programming.techie.springredditclone.repository.UserRepository;
 import com.programming.techie.springredditclone.service.AuthService;
 import com.programming.techie.springredditclone.service.CommentService;
+import com.programming.techie.springredditclone.event.PostCommentedEvent;
 import com.programming.techie.springredditclone.service.impl.CommentServiceImpl;
 import com.programming.techie.springredditclone.service.impl.MailContentBuilder;
 import com.programming.techie.springredditclone.service.MailService;
 import com.programming.techie.springredditclone.util.CursorUtil;
+import org.springframework.context.ApplicationEventPublisher;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -63,10 +66,14 @@ class CommentServiceTest {
     @Mock
     private CursorUtil cursorUtil;
 
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
+
     @InjectMocks
     private CommentServiceImpl commentService;
 
     private User testUser;
+    private User postOwner;
     private Post testPost;
     private Comment testComment;
     private CommentsDto testCommentDto;
@@ -79,11 +86,16 @@ class CommentServiceTest {
         testUser.setUsername("testuser");
         testUser.setEmail("test@example.com");
 
+        postOwner = new User();
+        postOwner.setUserId(2L);
+        postOwner.setUsername("postowner");
+        postOwner.setEmail("owner@example.com");
+
         testPost = new Post();
         testPost.setPostId(1L);
         testPost.setPostName("Test Post");
         testPost.setDescription("Test Description");
-        testPost.setUser(testUser);
+        testPost.setUser(postOwner); // Different user owns the post
 
         testComment = new Comment();
         testComment.setId(1L);
@@ -117,14 +129,39 @@ class CommentServiceTest {
         when(authService.getCurrentUser()).thenReturn(testUser);
         when(commentMapper.map(any(CommentsDto.class), any(Post.class), any(User.class)))
                 .thenReturn(testComment);
-        when(mailContentBuilder.build(anyString())).thenReturn("Email content");
 
         // Act
         commentService.save(testCommentDto);
 
         // Assert
         verify(commentRepository).save(testComment);
-        verify(mailService).sendMail(any());
+        verify(eventPublisher).publishEvent(any(PostCommentedEvent.class));
+    }
+
+    @Test
+    void save_CommentOnOthersPost_ShouldPublishCorrectEvent() {
+        // Arrange
+        when(postRepository.findById(1L)).thenReturn(Optional.of(testPost));
+        when(authService.getCurrentUser()).thenReturn(testUser);
+        when(commentMapper.map(any(CommentsDto.class), any(Post.class), any(User.class)))
+                .thenReturn(testComment);
+
+        // Act
+        commentService.save(testCommentDto);
+
+        // Assert
+        verify(commentRepository).save(testComment);
+        
+        // Capture and verify the event
+        ArgumentCaptor<PostCommentedEvent> eventCaptor = ArgumentCaptor.forClass(PostCommentedEvent.class);
+        verify(eventPublisher).publishEvent(eventCaptor.capture());
+        
+        PostCommentedEvent capturedEvent = eventCaptor.getValue();
+        assertEquals(testUser, capturedEvent.getActor());
+        assertEquals(postOwner, capturedEvent.getRecipient());
+        assertEquals(testPost, capturedEvent.getPost());
+        assertEquals(1L, capturedEvent.getPostId());
+        assertEquals(1L, capturedEvent.getCommentId());
     }
 
     @Test
@@ -401,9 +438,7 @@ class CommentServiceTest {
         when(authService.getCurrentUser()).thenReturn(user);
         when(commentMapper.map(any(CommentsDto.class), any(Post.class), any(User.class)))
                 .thenReturn(new Comment());
-        when(mailContentBuilder.build(anyString())).thenReturn("Email content");
         when(postRepository.save(any(Post.class))).thenReturn(post);
-        doNothing().when(mailService).sendMail(any(NotificationEmail.class));
 
         // Act
         commentService.save(commentsDto);
