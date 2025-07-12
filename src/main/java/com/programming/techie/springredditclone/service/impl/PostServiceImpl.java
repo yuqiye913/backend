@@ -25,6 +25,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -71,7 +72,7 @@ public class PostServiceImpl implements PostService {
     }
 
     /**
-     * Validate and retrieve subreddits by names
+     * Validate and retrieve subreddits by names, creating new ones if they don't exist
      */
     private Set<Subreddit> validateAndGetSubreddits(PostRequest postRequest) {
         Set<Subreddit> subreddits = new HashSet<>();
@@ -81,10 +82,26 @@ public class PostServiceImpl implements PostService {
             throw new RuntimeException("At least one subreddit must be specified");
         }
         
-        // Get all subreddits by names
+        User currentUser = authService.getCurrentUser();
+        
+        // Get or create subreddits by names
         for (String subredditName : postRequest.getSubredditNames()) {
-            Subreddit subreddit = subredditRepository.findByName(subredditName)
-                    .orElseThrow(() -> new RuntimeException("Subreddit not found with name - " + subredditName));
+            if (subredditName == null || subredditName.trim().isEmpty()) {
+                throw new RuntimeException("Subreddit name cannot be empty");
+            }
+            
+            String trimmedName = subredditName.trim();
+            Subreddit subreddit = subredditRepository.findByName(trimmedName)
+                    .orElseGet(() -> {
+                        // Create new subreddit if it doesn't exist
+                        Subreddit newSubreddit = Subreddit.builder()
+                                .name(trimmedName)
+                                .description("Created by " + currentUser.getUsername())
+                                .user(currentUser)
+                                .createdDate(Instant.now())
+                                .build();
+                        return subredditRepository.save(newSubreddit);
+                    });
             subreddits.add(subreddit);
         }
         
@@ -226,8 +243,14 @@ public class PostServiceImpl implements PostService {
     public List<PostResponse> getPostsByMultipleSubreddits(List<String> subredditNames) {
         Set<Subreddit> subreddits = subredditNames.stream()
                 .map(name -> subredditRepository.findByName(name)
-                        .orElseThrow(() -> new RuntimeException("Subreddit not found with name - " + name)))
+                        .orElse(null)) // Return null if subreddit doesn't exist
+                .filter(subreddit -> subreddit != null) // Filter out non-existent subreddits
                 .collect(Collectors.toSet());
+        
+        // If no valid subreddits found, return empty list
+        if (subreddits.isEmpty()) {
+            return new ArrayList<>();
+        }
         
         return postRepository.findBySubredditsIn(subreddits)
                 .stream()

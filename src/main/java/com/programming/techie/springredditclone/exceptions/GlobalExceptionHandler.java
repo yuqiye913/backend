@@ -9,6 +9,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import jakarta.validation.ConstraintViolationException;
+import org.springframework.security.authentication.BadCredentialsException;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -126,5 +127,16 @@ public class GlobalExceptionHandler {
         errorDetails.put("path", request.getDescription(false));
         
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorDetails);
+    }
+
+    @ExceptionHandler(BadCredentialsException.class)
+    public ResponseEntity<Map<String, Object>> handleBadCredentialsException(BadCredentialsException ex, WebRequest request) {
+        Map<String, Object> errorDetails = new HashMap<>();
+        errorDetails.put("timestamp", LocalDateTime.now());
+        errorDetails.put("status", HttpStatus.UNAUTHORIZED.value());
+        errorDetails.put("error", "Unauthorized");
+        errorDetails.put("message", "Invalid username or password");
+        errorDetails.put("path", request.getDescription(false));
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(errorDetails);
     }
 } 

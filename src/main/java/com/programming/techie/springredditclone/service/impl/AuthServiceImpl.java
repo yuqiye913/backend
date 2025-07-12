@@ -29,6 +29,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.Map;
+import java.util.HashMap;
 
 @Service
 @AllArgsConstructor
@@ -74,20 +76,31 @@ public class AuthServiceImpl implements AuthService {
             throw new IllegalArgumentException("Password cannot be empty");
         }
 
+        // Check if username already exists
+        if (userRepository.findByUsername(registerRequest.getUsername()).isPresent()) {
+            throw new IllegalArgumentException("Username already exists: " + registerRequest.getUsername());
+        }
+
+        // Check if email already exists
+        if (userRepository.findByEmail(registerRequest.getEmail()).isPresent()) {
+            throw new IllegalArgumentException("Email already exists: " + registerRequest.getEmail());
+        }
+
         User user = new User();
         user.setUsername(registerRequest.getUsername());
         user.setEmail(registerRequest.getEmail());
         user.setPassword(passwordEncoder.encode(registerRequest.getPassword()));
         user.setCreated(Instant.now());
-        user.setEnabled(false);
+        user.setEnabled(true); // Set to true to skip email verification
 
         userRepository.save(user);
 
-        String token = generateVerificationToken(user);
-        mailService.sendMail(new NotificationEmail("Please Activate your Account",
-                user.getEmail(), "Thank you for signing up to Spring Reddit, " +
-                "please click on the below url to activate your account : " +
-                "http://localhost:8080/api/auth/accountVerification/" + token));
+        // Commented out email verification for development
+        // String token = generateVerificationToken(user);
+        // mailService.sendMail(new NotificationEmail("Please Activate your Account",
+        //         user.getEmail(), "Thank you for signing up to Spring Reddit, " +
+        //         "please click on the below url to activate your account : " +
+        //         "http://localhost:8080/api/auth/accountVerification/" + token));
     }
 
     @Override

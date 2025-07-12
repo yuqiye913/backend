@@ -11,6 +11,9 @@ import lombok.AllArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.HashMap;
+import java.util.Map;
+
 import static org.springframework.http.HttpStatus.OK;
 
 @RestController
@@ -22,10 +25,11 @@ public class AuthController {
     private final RefreshTokenService refreshTokenService;
 
     @PostMapping("/signup")
-    public ResponseEntity<String> signup(@Valid @RequestBody RegisterRequest registerRequest) {
+    public ResponseEntity<Map<String, String>> signup(@Valid @RequestBody RegisterRequest registerRequest) {
         authService.signup(registerRequest);
-        return new ResponseEntity<>("User Registration Successful",
-                OK);
+        Map<String, String> response = new HashMap<>();
+        response.put("message", "User Registration Successful");
+        return new ResponseEntity<>(response, OK);
     }
 
     @GetMapping("accountVerification/{token}")

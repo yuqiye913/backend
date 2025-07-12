@@ -27,6 +27,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import com.programming.techie.springredditclone.dto.CursorPageResponse;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -177,36 +178,155 @@ class PostServiceTest {
     }
 
     @Test
-    @DisplayName("Should throw exception when subreddit not found")
-    void shouldThrowExceptionWhenSubredditNotFound() {
+    @DisplayName("Should create new subreddit when it doesn't exist")
+    void shouldCreateNewSubredditWhenItDoesntExist() {
         // Given
-        when(subredditRepository.findByName("nonexistent")).thenReturn(Optional.empty());
+        when(authService.getCurrentUser()).thenReturn(testUser);
+        when(subredditRepository.findByName("newsubreddit")).thenReturn(Optional.empty());
+        
+        Subreddit newSubreddit = new Subreddit();
+        newSubreddit.setId(3L);
+        newSubreddit.setName("newsubreddit");
+        newSubreddit.setDescription("Created by " + testUser.getUsername());
+        newSubreddit.setUser(testUser);
+        newSubreddit.setCreatedDate(Instant.now());
+        
+        when(subredditRepository.save(any(Subreddit.class))).thenReturn(newSubreddit);
+        when(postRepository.save(any(Post.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        postRequest.setSubredditNames(List.of("newsubreddit"));
+
+        // When
+        postService.save(postRequest);
+
+        // Then
+        verify(subredditRepository).findByName("newsubreddit");
+        verify(subredditRepository).save(any(Subreddit.class));
+        verify(postRepository).save(postCaptor.capture());
+        
+        Post savedPost = postCaptor.getValue();
+        assertThat(savedPost.getSubreddits()).hasSize(1);
+        assertThat(savedPost.getSubreddits().iterator().next().getName()).isEqualTo("newsubreddit");
+    }
+
+    @Test
+    @DisplayName("Should create multiple new subreddits when they don't exist")
+    void shouldCreateMultipleNewSubredditsWhenTheyDontExist() {
+        // Given
+        when(authService.getCurrentUser()).thenReturn(testUser);
+        when(subredditRepository.findByName("newsub1")).thenReturn(Optional.empty());
+        when(subredditRepository.findByName("newsub2")).thenReturn(Optional.empty());
+        
+        Subreddit newSub1 = new Subreddit();
+        newSub1.setId(3L);
+        newSub1.setName("newsub1");
+        newSub1.setDescription("Created by " + testUser.getUsername());
+        newSub1.setUser(testUser);
+        newSub1.setCreatedDate(Instant.now());
+        
+        Subreddit newSub2 = new Subreddit();
+        newSub2.setId(4L);
+        newSub2.setName("newsub2");
+        newSub2.setDescription("Created by " + testUser.getUsername());
+        newSub2.setUser(testUser);
+        newSub2.setCreatedDate(Instant.now());
+        
+        when(subredditRepository.save(any(Subreddit.class)))
+                .thenReturn(newSub1)
+                .thenReturn(newSub2);
+        when(postRepository.save(any(Post.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        postRequest.setSubredditNames(List.of("newsub1", "newsub2"));
+
+        // When
+        postService.save(postRequest);
+
+        // Then
+        verify(subredditRepository).findByName("newsub1");
+        verify(subredditRepository).findByName("newsub2");
+        verify(subredditRepository, times(2)).save(any(Subreddit.class));
+        verify(postRepository).save(postCaptor.capture());
+        
+        Post savedPost = postCaptor.getValue();
+        assertThat(savedPost.getSubreddits()).hasSize(2);
+        assertThat(savedPost.getSubreddits()).extracting("name").containsExactlyInAnyOrder("newsub1", "newsub2");
+    }
+
+    @Test
+    @DisplayName("Should use existing subreddit and create new one")
+    void shouldUseExistingSubredditAndCreateNewOne() {
+        // Given
+        when(authService.getCurrentUser()).thenReturn(testUser);
+        when(subredditRepository.findByName("programming")).thenReturn(Optional.of(programmingSubreddit));
+        when(subredditRepository.findByName("newsubreddit")).thenReturn(Optional.empty());
+        
+        Subreddit newSubreddit = new Subreddit();
+        newSubreddit.setId(3L);
+        newSubreddit.setName("newsubreddit");
+        newSubreddit.setDescription("Created by " + testUser.getUsername());
+        newSubreddit.setUser(testUser);
+        newSubreddit.setCreatedDate(Instant.now());
+        
+        when(subredditRepository.save(any(Subreddit.class))).thenReturn(newSubreddit);
+        when(postRepository.save(any(Post.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        postRequest.setSubredditNames(List.of("programming", "newsubreddit"));
+
+        // When
+        postService.save(postRequest);
+
+        // Then
+        verify(subredditRepository).findByName("programming");
+        verify(subredditRepository).findByName("newsubreddit");
+        verify(subredditRepository).save(any(Subreddit.class));
+        verify(postRepository).save(postCaptor.capture());
+        
+        Post savedPost = postCaptor.getValue();
+        assertThat(savedPost.getSubreddits()).hasSize(2);
+        assertThat(savedPost.getSubreddits()).contains(programmingSubreddit);
+        assertThat(savedPost.getSubreddits()).extracting("name").contains("newsubreddit");
+    }
+
+    @Test
+    @DisplayName("Should throw exception when subreddit name is empty")
+    void shouldThrowExceptionWhenSubredditNameIsEmpty() {
+        // Given
+        postRequest.setSubredditNames(List.of(""));
 
         // When & Then
-        assertThatThrownBy(() -> {
-            postRequest.setSubredditNames(List.of("nonexistent"));
-            postService.save(postRequest);
-        })
+        assertThatThrownBy(() -> postService.save(postRequest))
                 .isInstanceOf(RuntimeException.class)
-                .hasMessage("Subreddit not found with name - nonexistent");
+                .hasMessage("Subreddit name cannot be empty");
 
         verify(postRepository, never()).save(any(Post.class));
     }
 
     @Test
-    @DisplayName("Should throw exception when one subreddit not found in multiple")
-    void shouldThrowExceptionWhenOneSubredditNotFoundInMultiple() {
+    @DisplayName("Should throw exception when subreddit name is null")
+    void shouldThrowExceptionWhenSubredditNameIsNull() {
         // Given
-        when(subredditRepository.findByName("programming")).thenReturn(Optional.of(programmingSubreddit));
-        when(subredditRepository.findByName("nonexistent")).thenReturn(Optional.empty());
+        List<String> subredditNames = new ArrayList<>();
+        subredditNames.add(null);
+        postRequest.setSubredditNames(subredditNames);
 
         // When & Then
-        assertThatThrownBy(() -> {
-            postRequest.setSubredditNames(List.of("programming", "nonexistent"));
-            postService.save(postRequest);
-        })
+        assertThatThrownBy(() -> postService.save(postRequest))
                 .isInstanceOf(RuntimeException.class)
-                .hasMessage("Subreddit not found with name - nonexistent");
+                .hasMessage("Subreddit name cannot be empty");
+
+        verify(postRepository, never()).save(any(Post.class));
+    }
+
+    @Test
+    @DisplayName("Should throw exception when subreddit name is whitespace only")
+    void shouldThrowExceptionWhenSubredditNameIsWhitespaceOnly() {
+        // Given
+        postRequest.setSubredditNames(List.of("   "));
+
+        // When & Then
+        assertThatThrownBy(() -> postService.save(postRequest))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessage("Subreddit name cannot be empty");
 
         verify(postRepository, never()).save(any(Post.class));
     }
@@ -346,6 +466,47 @@ class PostServiceTest {
     }
 
     @Test
+    @DisplayName("Should filter out non-existent subreddits when getting posts by multiple subreddits")
+    void shouldFilterOutNonExistentSubredditsWhenGettingPostsByMultipleSubreddits() {
+        // Given
+        List<String> subredditNames = List.of("programming", "nonexistent", "gaming");
+        Set<Subreddit> existingSubreddits = Set.of(programmingSubreddit, gamingSubreddit);
+        List<Post> posts = List.of(new Post(), new Post());
+        List<PostResponse> expectedResponses = List.of(new PostResponse(), new PostResponse());
+
+        when(subredditRepository.findByName("programming")).thenReturn(Optional.of(programmingSubreddit));
+        when(subredditRepository.findByName("nonexistent")).thenReturn(Optional.empty());
+        when(subredditRepository.findByName("gaming")).thenReturn(Optional.of(gamingSubreddit));
+        when(postRepository.findBySubredditsIn(existingSubreddits)).thenReturn(posts);
+        when(postMapper.mapToDto(posts.get(0))).thenReturn(expectedResponses.get(0));
+        when(postMapper.mapToDto(posts.get(1))).thenReturn(expectedResponses.get(1));
+
+        // When
+        List<PostResponse> result = postService.getPostsByMultipleSubreddits(subredditNames);
+
+        // Then
+        assertThat(result).isEqualTo(expectedResponses);
+        verify(postRepository).findBySubredditsIn(existingSubreddits);
+    }
+
+    @Test
+    @DisplayName("Should return empty list when all subreddits are non-existent")
+    void shouldReturnEmptyListWhenAllSubredditsAreNonExistent() {
+        // Given
+        List<String> subredditNames = List.of("nonexistent1", "nonexistent2");
+
+        when(subredditRepository.findByName("nonexistent1")).thenReturn(Optional.empty());
+        when(subredditRepository.findByName("nonexistent2")).thenReturn(Optional.empty());
+
+        // When
+        List<PostResponse> result = postService.getPostsByMultipleSubreddits(subredditNames);
+
+        // Then
+        assertThat(result).isEmpty();
+        verify(postRepository, never()).findBySubredditsIn(any());
+    }
+
+    @Test
     @DisplayName("Should get posts by subreddit ID successfully")
     void shouldGetPostsBySubredditId() {
         // Given
@@ -415,7 +576,7 @@ class PostServiceTest {
 
         // Then
         verify(postRepository).findById(postId);
-        verify(authService).getCurrentUser();
+        verify(authService, times(2)).getCurrentUser(); // Called twice: once in updatePost, once in validateAndGetSubreddits
         verify(postRepository).save(postCaptor.capture());
         
         Post savedPost = postCaptor.getValue();
@@ -424,6 +585,59 @@ class PostServiceTest {
         assertThat(savedPost.getUrl()).isEqualTo("http://updated.com");
         assertThat(savedPost.getSubreddits()).hasSize(2);
         assertThat(savedPost.getSubreddits()).contains(programmingSubreddit, gamingSubreddit);
+    }
+
+    @Test
+    @DisplayName("Should update post with new subreddit creation")
+    void shouldUpdatePostWithNewSubredditCreation() {
+        // Given
+        Long postId = 1L;
+        Post existingPost = new Post();
+        existingPost.setPostId(postId);
+        existingPost.setPostName("Old Post Name");
+        existingPost.setDescription("Old Description");
+        existingPost.setUrl("http://old.com");
+        existingPost.setUser(testUser);
+        existingPost.setSubreddits(Set.of(programmingSubreddit));
+
+        PostRequest updateRequest = new PostRequest();
+        updateRequest.setPostName("Updated Post Name");
+        updateRequest.setDescription("Updated Description");
+        updateRequest.setUrl("http://updated.com");
+        updateRequest.setSubredditNames(List.of("programming", "newsubreddit"));
+
+        Subreddit newSubreddit = new Subreddit();
+        newSubreddit.setId(3L);
+        newSubreddit.setName("newsubreddit");
+        newSubreddit.setDescription("Created by " + testUser.getUsername());
+        newSubreddit.setUser(testUser);
+        newSubreddit.setCreatedDate(Instant.now());
+
+        when(postRepository.findById(postId)).thenReturn(Optional.of(existingPost));
+        when(authService.getCurrentUser()).thenReturn(testUser);
+        when(subredditRepository.findByName("programming")).thenReturn(Optional.of(programmingSubreddit));
+        when(subredditRepository.findByName("newsubreddit")).thenReturn(Optional.empty());
+        when(subredditRepository.save(any(Subreddit.class))).thenReturn(newSubreddit);
+        when(postRepository.save(any(Post.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        // When
+        postService.updatePost(postId, updateRequest);
+
+        // Then
+        verify(postRepository).findById(postId);
+        verify(authService, times(2)).getCurrentUser(); // Called twice: once in updatePost, once in validateAndGetSubreddits
+        verify(subredditRepository).findByName("programming");
+        verify(subredditRepository).findByName("newsubreddit");
+        verify(subredditRepository).save(any(Subreddit.class));
+        verify(postRepository).save(postCaptor.capture());
+        
+        Post savedPost = postCaptor.getValue();
+        assertThat(savedPost.getPostName()).isEqualTo("Updated Post Name");
+        assertThat(savedPost.getDescription()).isEqualTo("Updated Description");
+        assertThat(savedPost.getUrl()).isEqualTo("http://updated.com");
+        assertThat(savedPost.getSubreddits()).hasSize(2);
+        assertThat(savedPost.getSubreddits()).contains(programmingSubreddit);
+        assertThat(savedPost.getSubreddits()).extracting("name").contains("newsubreddit");
     }
 
     @Test

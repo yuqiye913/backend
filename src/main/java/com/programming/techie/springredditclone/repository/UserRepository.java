@@ -12,6 +12,7 @@ import java.util.Optional;
 @Repository
 public interface UserRepository extends JpaRepository<User, Long> {
     Optional<User> findByUsername(String username);
+    Optional<User> findByEmail(String email);
     
     @Query(value = "SELECT * FROM users u WHERE u.user_id != :currentUserId AND u.enabled = true ORDER BY u.created DESC LIMIT :limit", nativeQuery = true)
     List<User> findPotentialMatches(@Param("currentUserId") Long currentUserId, @Param("limit") int limit);
