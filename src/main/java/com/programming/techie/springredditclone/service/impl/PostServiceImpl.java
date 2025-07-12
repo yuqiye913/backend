@@ -30,6 +30,10 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.authentication.AnonymousAuthenticationToken;
+import org.springframework.security.oauth2.jwt.Jwt;
 
 @Service
 @AllArgsConstructor
@@ -198,40 +202,44 @@ public class PostServiceImpl implements PostService {
     public CursorPageResponse<PostResponse> getPostsByUsername(String username, String cursor, int limit) {
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new RuntimeException("User not found with username - " + username));
-        
-        User currentUser = authService.getCurrentUser();
-        
-        // Check if current user is blocked by target user or has blocked target user
-        if (blockService.isBlockedByUser(user.getUserId()) || blockService.hasBlockedUser(user.getUserId())) {
-            throw new SpringRedditException("Cannot view posts due to block restrictions");
+
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication != null
+                && !(authentication instanceof AnonymousAuthenticationToken)
+                && authentication.isAuthenticated()
+                && authentication.getPrincipal() instanceof Jwt) {
+            User currentUser = authService.getCurrentUser();
+            if (blockService.isBlockedByUser(user.getUserId()) || blockService.hasBlockedUser(user.getUserId())) {
+                throw new SpringRedditException("Cannot view posts due to block restrictions");
+            }
         }
-        
+
         Instant createdDate = Instant.now();
         Long postId = Long.MAX_VALUE;
-        
+
         if (cursor != null && !cursor.isEmpty()) {
             CursorUtil.CursorData cursorData = cursorUtil.decodeCursor(cursor);
             createdDate = cursorData.getCreatedDate();
             postId = cursorData.getId();
         }
-        
+
         List<Post> posts = postRepository.findByUserWithCursor(user, createdDate, postId, PageRequest.of(0, limit + 1));
-        
+
         boolean hasMore = posts.size() > limit;
         if (hasMore) {
             posts = posts.subList(0, limit);
         }
-        
+
         List<PostResponse> postResponses = posts.stream()
                 .map(postMapper::mapToDto)
                 .collect(Collectors.toList());
-        
+
         String nextCursor = null;
         if (hasMore && !posts.isEmpty()) {
             Post lastPost = posts.get(posts.size() - 1);
             nextCursor = cursorUtil.encodeCursor(lastPost.getCreatedDate(), lastPost.getPostId());
         }
-        
+
         return new CursorPageResponse<>(postResponses, nextCursor, hasMore, limit);
     }
 

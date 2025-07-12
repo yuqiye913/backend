@@ -24,6 +24,10 @@ import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.authentication.AnonymousAuthenticationToken;
+import org.springframework.security.oauth2.jwt.Jwt;
 
 @Service
 @AllArgsConstructor
@@ -146,6 +150,13 @@ public class BlockServiceImpl implements BlockService {
     @Override
     @Transactional(readOnly = true)
     public boolean hasBlockedUser(Long userId) {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null
+            || authentication instanceof AnonymousAuthenticationToken
+            || !authentication.isAuthenticated()
+            || !(authentication.getPrincipal() instanceof Jwt)) {
+            return false; // Not logged in, so can't have blocked anyone
+        }
         User currentUser = authService.getCurrentUser();
         User targetUser = userRepository.findById(userId)
                 .orElseThrow(() -> new SpringRedditException("User not found with ID: " + userId));
@@ -156,6 +167,13 @@ public class BlockServiceImpl implements BlockService {
     @Override
     @Transactional(readOnly = true)
     public boolean isBlockedByUser(Long userId) {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null
+            || authentication instanceof AnonymousAuthenticationToken
+            || !authentication.isAuthenticated()
+            || !(authentication.getPrincipal() instanceof Jwt)) {
+            return false; // Not logged in, so can't be blocked
+        }
         User currentUser = authService.getCurrentUser();
         User targetUser = userRepository.findById(userId)
                 .orElseThrow(() -> new SpringRedditException("User not found with ID: " + userId));
