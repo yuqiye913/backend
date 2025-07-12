@@ -73,6 +73,13 @@ public class PostController {
         return status(HttpStatus.OK).body(posts);
     }
 
+    @GetMapping("/promoted")
+    public ResponseEntity<CursorPageResponse<PostResponse>> getPromotedPosts(
+            @RequestParam(required = false) String cursor,
+            @RequestParam(defaultValue = "10") int limit) {
+        return status(HttpStatus.OK).body(postService.getPromotedPosts(cursor, limit));
+    }
+
     @PutMapping("/{postId}")
     public ResponseEntity<Void> updatePost(@PathVariable Long postId, @Valid @RequestBody PostRequest postRequest) {
         postService.updatePost(postId, postRequest);

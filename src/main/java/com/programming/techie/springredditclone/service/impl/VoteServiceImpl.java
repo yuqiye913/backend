@@ -55,21 +55,21 @@ public class VoteServiceImpl implements VoteService {
         Optional<Vote> existingVote = voteRepository.findByPostAndUser(post, currentUser);
         
         if (existingVote.isPresent()) {
-            // User has already voted - update existing vote
+            // User has already voted - check if it's the same vote type
             Vote vote = existingVote.get();
             VoteType oldVoteType = vote.getVoteType();
             VoteType newVoteType = voteDto.getVoteType();
             
             if (oldVoteType.equals(newVoteType)) {
-                throw new SpringRedditException("You have already " + newVoteType + "'d for this post");
+                // Same vote type - remove the vote (toggle off)
+                post.setVoteCount(post.getVoteCount() - oldVoteType.getDirection());
+                voteRepository.delete(vote);
+            } else {
+                // Different vote type - change the vote
+                post.setVoteCount(post.getVoteCount() - oldVoteType.getDirection() + newVoteType.getDirection());
+                vote.setVoteType(newVoteType);
+                voteRepository.save(vote);
             }
-            
-            // Update vote count: remove old vote, add new vote
-            post.setVoteCount(post.getVoteCount() - oldVoteType.getDirection() + newVoteType.getDirection());
-            
-            // Update the existing vote
-            vote.setVoteType(newVoteType);
-            voteRepository.save(vote);
         } else {
             // User hasn't voted yet - create new vote
             boolean isNewUpvote = UPVOTE.equals(voteDto.getVoteType());
@@ -106,21 +106,21 @@ public class VoteServiceImpl implements VoteService {
         Optional<Vote> existingVote = voteRepository.findByCommentAndUser(comment, currentUser);
         
         if (existingVote.isPresent()) {
-            // User has already voted - update existing vote
+            // User has already voted - check if it's the same vote type
             Vote vote = existingVote.get();
             VoteType oldVoteType = vote.getVoteType();
             VoteType newVoteType = commentVoteRequest.getVoteType();
             
             if (oldVoteType.equals(newVoteType)) {
-                throw new SpringRedditException("You have already " + newVoteType + "'d for this comment");
+                // Same vote type - remove the vote (toggle off)
+                comment.setVoteCount(comment.getVoteCount() - oldVoteType.getDirection());
+                voteRepository.delete(vote);
+            } else {
+                // Different vote type - change the vote
+                comment.setVoteCount(comment.getVoteCount() - oldVoteType.getDirection() + newVoteType.getDirection());
+                vote.setVoteType(newVoteType);
+                voteRepository.save(vote);
             }
-            
-            // Update vote count: remove old vote, add new vote
-            comment.setVoteCount(comment.getVoteCount() - oldVoteType.getDirection() + newVoteType.getDirection());
-            
-            // Update the existing vote
-            vote.setVoteType(newVoteType);
-            voteRepository.save(vote);
         } else {
             // User hasn't voted yet - create new vote
             if (UPVOTE.equals(commentVoteRequest.getVoteType())) {
@@ -146,4 +146,5 @@ public class VoteServiceImpl implements VoteService {
                 .orElseThrow(() -> new SpringRedditException("Comment Not Found with ID - " + commentId));
         return comment.getVoteCount();
     }
+
 } 

@@ -373,4 +373,94 @@ public class PostServiceImpl implements PostService {
                 .map(postMapper::mapToDto)
                 .collect(Collectors.toList());
     }
+    
+    @Override
+    @Transactional(readOnly = true)
+    public List<PostResponse> getPromotedPosts(int limit) {
+        // TODO: Implement promotion algorithm
+        // This method should return posts that are promoted based on various factors such as:
+        // - High engagement (likes, comments, shares)
+        // - Recent activity
+        // - User reputation/credibility
+        // - Content quality metrics
+        // - Trending topics
+        // - Sponsored content (if applicable)
+        
+        log.info("Getting promoted posts with limit: {}", limit);
+        
+        // Placeholder implementation - currently returns recent posts with high vote counts
+        // This should be replaced with a proper promotion algorithm
+        List<Post> promotedPosts = postRepository.findTopPostsByVoteCount(PageRequest.of(0, limit));
+        
+        return promotedPosts.stream()
+                .map(post -> {
+                    PostResponse response = postMapper.mapToDto(post);
+                    // Add vote status if user is authenticated
+                    if (authService.isLoggedIn()) {
+                        User currentUser = authService.getCurrentUser();
+                        response.setUpVote(isPostUpVoted(post, currentUser));
+                        response.setDownVote(isPostDownVoted(post, currentUser));
+                    }
+                    return response;
+                })
+                .collect(Collectors.toList());
+    }
+    
+    @Override
+    @Transactional(readOnly = true)
+    public CursorPageResponse<PostResponse> getPromotedPosts(String cursor, int limit) {
+        // TODO: Implement promotion algorithm with pagination
+        // This method should return posts that are promoted based on various factors such as:
+        // - High engagement (likes, comments, shares)
+        // - Recent activity
+        // - User reputation/credibility
+        // - Content quality metrics
+        // - Trending topics
+        // - Sponsored content (if applicable)
+        
+        log.info("Getting promoted posts with cursor: {} and limit: {}", cursor, limit);
+        
+        // Initialize cursor values for first page
+        Integer voteCount = Integer.MAX_VALUE;
+        Instant createdDate = Instant.now();
+        Long postId = Long.MAX_VALUE;
+        
+        if (cursor != null && !cursor.isEmpty()) {
+            CursorUtil.CursorData cursorData = cursorUtil.decodeCursor(cursor);
+            // For promoted posts, we need to decode vote count from cursor
+            // This is a simplified approach - in a real implementation, you might want to encode vote count in the cursor
+            createdDate = cursorData.getCreatedDate();
+            postId = cursorData.getId();
+            // Note: voteCount would need to be encoded in cursor for proper pagination
+            // For now, we'll use a simplified approach
+        }
+        
+        List<Post> posts = postRepository.findPromotedPostsWithCursor(voteCount, createdDate, postId, PageRequest.of(0, limit + 1));
+        
+        boolean hasMore = posts.size() > limit;
+        if (hasMore) {
+            posts = posts.subList(0, limit);
+        }
+        
+        List<PostResponse> postResponses = posts.stream()
+                .map(post -> {
+                    PostResponse response = postMapper.mapToDto(post);
+                    // Add vote status if user is authenticated
+                    if (authService.isLoggedIn()) {
+                        User currentUser = authService.getCurrentUser();
+                        response.setUpVote(isPostUpVoted(post, currentUser));
+                        response.setDownVote(isPostDownVoted(post, currentUser));
+                    }
+                    return response;
+                })
+                .collect(Collectors.toList());
+        
+        String nextCursor = null;
+        if (hasMore && !posts.isEmpty()) {
+            Post lastPost = posts.get(posts.size() - 1);
+            nextCursor = cursorUtil.encodeCursor(lastPost.getCreatedDate(), lastPost.getPostId());
+        }
+        
+        return new CursorPageResponse<>(postResponses, nextCursor, hasMore, limit);
+    }
 } 

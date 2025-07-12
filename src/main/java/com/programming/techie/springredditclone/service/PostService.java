@@ -80,4 +80,19 @@ public interface PostService {
      * @return List of post responses
      */
     List<PostResponse> searchPosts(String searchTerm);
+    
+    /**
+     * Get promoted posts based on promotion algorithm
+     * @param limit Number of promoted posts to return
+     * @return List of promoted post responses
+     */
+    List<PostResponse> getPromotedPosts(int limit);
+    
+    /**
+     * Get promoted posts based on promotion algorithm with cursor-based pagination
+     * @param cursor Cursor for pagination (optional)
+     * @param limit Number of promoted posts to return
+     * @return Cursor page response
+     */
+    CursorPageResponse<PostResponse> getPromotedPosts(String cursor, int limit);
 }

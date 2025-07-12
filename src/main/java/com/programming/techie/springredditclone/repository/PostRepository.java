@@ -53,4 +53,12 @@ public interface PostRepository extends JpaRepository<Post, Long> {
            "WHERE (:searchTerm IS NULL OR s.name LIKE %:searchTerm% OR p.postName LIKE %:searchTerm%) " +
            "ORDER BY p.createdDate DESC")
     List<Post> searchPosts(@Param("searchTerm") String searchTerm);
+    
+    // Find top posts by vote count for promotion algorithm
+    @Query("SELECT p FROM Post p ORDER BY p.voteCount DESC, p.createdDate DESC")
+    List<Post> findTopPostsByVoteCount(Pageable pageable);
+    
+    // Find promoted posts with cursor-based pagination
+    @Query("SELECT p FROM Post p WHERE (p.voteCount, p.createdDate, p.postId) < (:voteCount, :createdDate, :postId) ORDER BY p.voteCount DESC, p.createdDate DESC, p.postId DESC")
+    List<Post> findPromotedPostsWithCursor(@Param("voteCount") Integer voteCount, @Param("createdDate") Instant createdDate, @Param("postId") Long postId, Pageable pageable);
 }
