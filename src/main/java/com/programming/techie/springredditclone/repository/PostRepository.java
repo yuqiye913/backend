@@ -43,4 +43,14 @@ public interface PostRepository extends JpaRepository<Post, Long> {
     
     @Query("SELECT COUNT(p) > 0 FROM Post p WHERE (p.createdDate, p.postId) < (:createdDate, :postId) AND p.user = :user")
     boolean hasMoreResultsByUser(@Param("user") User user, @Param("createdDate") Instant createdDate, @Param("postId") Long postId);
+    
+    // Search posts by subreddit name
+    @Query("SELECT p FROM Post p JOIN p.subreddits s WHERE s.name LIKE %:subredditName% ORDER BY p.createdDate DESC")
+    List<Post> findBySubredditName(@Param("subredditName") String subredditName);
+    
+    // Search posts by subreddit name and/or post name
+    @Query("SELECT DISTINCT p FROM Post p JOIN p.subreddits s " +
+           "WHERE (:searchTerm IS NULL OR s.name LIKE %:searchTerm% OR p.postName LIKE %:searchTerm%) " +
+           "ORDER BY p.createdDate DESC")
+    List<Post> searchPosts(@Param("searchTerm") String searchTerm);
 }

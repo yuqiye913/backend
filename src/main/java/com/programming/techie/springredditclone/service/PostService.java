@@ -66,4 +66,18 @@ public interface PostService {
      * @param postId Post ID to delete
      */
     void deletePost(Long postId);
+    
+    /**
+     * Search posts by subreddit name
+     * @param subredditName Subreddit name to search for
+     * @return List of post responses
+     */
+    List<PostResponse> searchPostsBySubreddit(String subredditName);
+    
+    /**
+     * Search posts by subreddit name and/or post name
+     * @param searchTerm Search term to match against subreddit name or post name
+     * @return List of post responses
+     */
+    List<PostResponse> searchPosts(String searchTerm);
 }

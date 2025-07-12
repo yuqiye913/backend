@@ -10,6 +10,7 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import jakarta.validation.ConstraintViolationException;
 import org.springframework.security.authentication.BadCredentialsException;
+import com.programming.techie.springredditclone.exceptions.InvalidPostContentException;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -138,5 +139,16 @@ public class GlobalExceptionHandler {
         errorDetails.put("message", "Invalid username or password");
         errorDetails.put("path", request.getDescription(false));
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(errorDetails);
+    }
+
+    @ExceptionHandler(InvalidPostContentException.class)
+    public ResponseEntity<Map<String, Object>> handleInvalidPostContentException(InvalidPostContentException ex, WebRequest request) {
+        Map<String, Object> errorDetails = new HashMap<>();
+        errorDetails.put("timestamp", LocalDateTime.now());
+        errorDetails.put("status", HttpStatus.BAD_REQUEST.value());
+        errorDetails.put("error", "Invalid Post Content");
+        errorDetails.put("message", ex.getMessage());
+        errorDetails.put("path", request.getDescription(false));
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorDetails);
     }
 } 

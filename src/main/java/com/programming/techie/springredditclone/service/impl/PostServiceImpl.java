@@ -34,6 +34,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.oauth2.jwt.Jwt;
+import com.programming.techie.springredditclone.exceptions.InvalidPostContentException;
 
 @Service
 @AllArgsConstructor
@@ -58,9 +59,12 @@ public class PostServiceImpl implements PostService {
             throw new RuntimeException("At least one subreddit must be specified");
         }
         
-        if (postRequest.getPostName().isEmpty()) {
+        if (postRequest.getPostName() == null || postRequest.getPostName().trim().isEmpty()) {
             throw new RuntimeException("Post name cannot be empty");
         }
+        
+        // Enhanced content validation that checks for meaningful content beyond hashtags
+        validatePostContent(postRequest.getDescription());
 
         // Create post with multiple subreddits
         Post post = new Post();
@@ -73,6 +77,26 @@ public class PostServiceImpl implements PostService {
         post.setVoteCount(0);
         
         postRepository.save(post);
+    }
+
+    /**
+     * Validates that post content has meaningful text beyond just hashtags
+     */
+    private void validatePostContent(String description) {
+        if (description == null || description.trim().isEmpty()) {
+            throw new InvalidPostContentException("Post content/description cannot be empty");
+        }
+        
+        // Remove hashtags and check if there's meaningful content left
+        String contentWithoutHashtags = description.replaceAll("#\\w+", "").trim();
+        if (contentWithoutHashtags.isEmpty()) {
+            throw new InvalidPostContentException("Post content cannot consist only of hashtags");
+        }
+        
+        // Check if remaining content has at least one alphanumeric character
+        if (!contentWithoutHashtags.matches(".*[a-zA-Z0-9].*")) {
+            throw new InvalidPostContentException("Post content must contain meaningful text beyond hashtags");
+        }
     }
 
     /**
@@ -289,6 +313,9 @@ public class PostServiceImpl implements PostService {
             throw new RuntimeException("Post name cannot be empty");
         }
         
+        // Enhanced content validation that checks for meaningful content beyond hashtags
+        validatePostContent(postRequest.getDescription());
+        
         // Update the post fields
         existingPost.setPostName(postRequest.getPostName().trim());
         existingPost.setDescription(postRequest.getDescription());
@@ -327,5 +354,23 @@ public class PostServiceImpl implements PostService {
         return voteRepository.findByPostAndUser(post, user)
                 .map(vote -> vote.getVoteType().equals(voteType))
                 .orElse(false);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<PostResponse> searchPostsBySubreddit(String subredditName) {
+        List<Post> posts = postRepository.findBySubredditName(subredditName);
+        return posts.stream()
+                .map(postMapper::mapToDto)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<PostResponse> searchPosts(String searchTerm) {
+        List<Post> posts = postRepository.searchPosts(searchTerm);
+        return posts.stream()
+                .map(postMapper::mapToDto)
+                .collect(Collectors.toList());
     }
 } 

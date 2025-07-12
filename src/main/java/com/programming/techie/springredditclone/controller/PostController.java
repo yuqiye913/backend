@@ -66,6 +66,13 @@ public class PostController {
         return status(HttpStatus.OK).body(postService.getPostsByMultipleSubreddits(subredditNames));
     }
 
+    @GetMapping("/search")
+    public ResponseEntity<List<PostResponse>> searchPosts(
+            @RequestParam String query) {
+        List<PostResponse> posts = postService.searchPosts(query);
+        return status(HttpStatus.OK).body(posts);
+    }
+
     @PutMapping("/{postId}")
     public ResponseEntity<Void> updatePost(@PathVariable Long postId, @Valid @RequestBody PostRequest postRequest) {
         postService.updatePost(postId, postRequest);

@@ -21,5 +21,7 @@ public class PostRequest {
     @NotBlank(message = "Post Name cannot be empty or Null")
     private String postName;
     private String url;
+    
+    @NotBlank(message = "Post content/description cannot be empty")
     private String description;
 }
