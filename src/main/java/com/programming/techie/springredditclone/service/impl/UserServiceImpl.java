@@ -12,6 +12,7 @@ import com.programming.techie.springredditclone.mapper.UserMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
 import java.util.Optional;
 
 @Service
@@ -54,5 +55,24 @@ public class UserServiceImpl implements UserService {
         
         UserIntro userIntro = userIntroOpt.get();
         return userMapper.mapToGetIntroDto(user, userIntro);
+    }
+
+    @Override
+    public List<GetIntroDto> searchUsersByUsername(String username) {
+        // Search for users whose username contains the search term (case-insensitive)
+        List<User> users = userRepository.findAll().stream()
+                .filter(user -> user.getUsername().toLowerCase().contains(username.toLowerCase()))
+                .toList();
+        
+        return users.stream()
+                .map(user -> {
+                    Optional<UserIntro> userIntroOpt = userIntroRepository.findByUserId(user.getUserId());
+                    if (userIntroOpt.isPresent()) {
+                        return userMapper.mapToGetIntroDto(user, userIntroOpt.get());
+                    } else {
+                        return userMapper.mapToGetIntroDto(user);
+                    }
+                })
+                .toList();
     }
 } 

@@ -61,6 +61,8 @@ public class SecurityConfig {
                         .permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/follow/following/count/**")
                         .permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/user/search")
+                        .permitAll()
                         .requestMatchers("/v2/api-docs",
                                 "/configuration/ui",
                                 "/swagger-resources/**",
