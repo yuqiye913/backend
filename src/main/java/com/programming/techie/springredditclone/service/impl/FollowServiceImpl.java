@@ -127,11 +127,14 @@ public class FollowServiceImpl implements FollowService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
         
-        User currentUser = authService.getCurrentUser();
-        
-        // Check if current user is blocked by target user or has blocked target user
-        if (blockService.isBlockedByUser(userId) || blockService.hasBlockedUser(userId)) {
-            throw new RuntimeException("Cannot view follower count due to block restrictions");
+        // Only check block restrictions if user is authenticated
+        if (authService.isLoggedIn()) {
+            User currentUser = authService.getCurrentUser();
+            
+            // Check if current user is blocked by target user or has blocked target user
+            if (blockService.isBlockedByUser(userId) || blockService.hasBlockedUser(userId)) {
+                throw new RuntimeException("Cannot view follower count due to block restrictions");
+            }
         }
         
         Long followerCount = followRepository.countFollowersByUser(user);
@@ -144,11 +147,14 @@ public class FollowServiceImpl implements FollowService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
         
-        User currentUser = authService.getCurrentUser();
-        
-        // Check if current user is blocked by target user or has blocked target user
-        if (blockService.isBlockedByUser(userId) || blockService.hasBlockedUser(userId)) {
-            throw new RuntimeException("Cannot view following count due to block restrictions");
+        // Only check block restrictions if user is authenticated
+        if (authService.isLoggedIn()) {
+            User currentUser = authService.getCurrentUser();
+            
+            // Check if current user is blocked by target user or has blocked target user
+            if (blockService.isBlockedByUser(userId) || blockService.hasBlockedUser(userId)) {
+                throw new RuntimeException("Cannot view following count due to block restrictions");
+            }
         }
         
         Long followingCount = followRepository.countFollowingByUser(user);

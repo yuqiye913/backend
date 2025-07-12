@@ -56,14 +56,12 @@ public class FollowController {
     }
 
     @GetMapping("/followers/count/{userId}")
-    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<FollowerCountDto> getFollowerCountByUserId(@PathVariable Long userId) {
         FollowerCountDto followerCount = followService.getFollowerCountByUserId(userId);
         return ResponseEntity.ok(followerCount);
     }
 
     @GetMapping("/following/count/{userId}")
-    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<FollowingCountDto> getFollowingCountByUserId(@PathVariable Long userId) {
         FollowingCountDto followingCount = followService.getFollowingCountByUserId(userId);
         return ResponseEntity.ok(followingCount);
