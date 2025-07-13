@@ -11,6 +11,7 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 import jakarta.validation.ConstraintViolationException;
 import org.springframework.security.authentication.BadCredentialsException;
 import com.programming.techie.springredditclone.exceptions.InvalidPostContentException;
+import com.programming.techie.springredditclone.exceptions.NotFollowingException;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -147,6 +148,17 @@ public class GlobalExceptionHandler {
         errorDetails.put("timestamp", LocalDateTime.now());
         errorDetails.put("status", HttpStatus.BAD_REQUEST.value());
         errorDetails.put("error", "Invalid Post Content");
+        errorDetails.put("message", ex.getMessage());
+        errorDetails.put("path", request.getDescription(false));
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorDetails);
+    }
+
+    @ExceptionHandler(NotFollowingException.class)
+    public ResponseEntity<Map<String, Object>> handleNotFollowingException(NotFollowingException ex, WebRequest request) {
+        Map<String, Object> errorDetails = new HashMap<>();
+        errorDetails.put("timestamp", LocalDateTime.now());
+        errorDetails.put("status", HttpStatus.BAD_REQUEST.value());
+        errorDetails.put("error", "Not Following");
         errorDetails.put("message", ex.getMessage());
         errorDetails.put("path", request.getDescription(false));
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorDetails);

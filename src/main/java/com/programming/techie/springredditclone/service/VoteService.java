@@ -1,26 +1,44 @@
 package com.programming.techie.springredditclone.service;
 
-import com.programming.techie.springredditclone.dto.CommentVoteRequest;
-import com.programming.techie.springredditclone.dto.VoteDto;
+import com.programming.techie.springredditclone.dto.VoteStatusDto;
 
 public interface VoteService {
     
     /**
-     * Vote on a post (upvote or downvote)
-     * @param voteDto Vote data containing post ID and vote type
+     * Like a post
+     * @param postId Post ID to like
      */
-    void vote(VoteDto voteDto);
+    void likePost(Long postId);
     
     /**
-     * Vote on a comment (upvote or downvote)
-     * @param commentVoteRequest Vote data containing comment ID and vote type
+     * Unlike a post
+     * @param postId Post ID to unlike
      */
-    void voteOnComment(CommentVoteRequest commentVoteRequest);
+    void unlikePost(Long postId);
     
     /**
-     * Get vote count for a comment
+     * Get current like status for a post
+     * @param postId Post ID
+     * @return Like status including whether user has liked and total count
+     */
+    VoteStatusDto getPostLikeStatus(Long postId);
+    
+    /**
+     * Like a comment
+     * @param commentId Comment ID to like
+     */
+    void likeComment(Long commentId);
+    
+    /**
+     * Unlike a comment
+     * @param commentId Comment ID to unlike
+     */
+    void unlikeComment(Long commentId);
+    
+    /**
+     * Get current like status for a comment
      * @param commentId Comment ID
-     * @return Vote count (positive for upvotes, negative for downvotes)
+     * @return Like status including whether user has liked and total count
      */
-    Integer getCommentVoteCount(Long commentId);
+    VoteStatusDto getCommentLikeStatus(Long commentId);
 }

@@ -16,7 +16,10 @@ public interface CommentMapper {
     // Map from CommentsDto to Comment (for backward compatibility)
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "text", source = "commentsDto.text")
-    @Mapping(target = "createdDate", expression = "java(java.time.Instant.now())")
+    @Mapping(target = "createdDate", ignore = true)
+    @Mapping(target = "editedDate", ignore = true)
+    @Mapping(target = "deletedDate", ignore = true)
+    @Mapping(target = "hiddenDate", ignore = true)
     @Mapping(target = "post", source = "post")
     @Mapping(target = "user", source = "user")
     @Mapping(target = "parentComment", ignore = true)
@@ -51,6 +54,10 @@ public interface CommentMapper {
     @Mapping(target = "replyCount", expression = "java(comment.getReplyCount() != null ? comment.getReplyCount() : 0)")
     @Mapping(target = "userDisplayName", expression = "java(comment.getUser().getUsername())")
     @Mapping(target = "userProfilePicture", constant = "")
+    @Mapping(target = "createdDate", expression = "java(comment.getCreatedDate() != null ? comment.getCreatedDate().toEpochMilli() : null)")
+    @Mapping(target = "editedDate", expression = "java(comment.getEditedDate() != null ? comment.getEditedDate().toEpochMilli() : null)")
+    @Mapping(target = "deletedDate", expression = "java(comment.getDeletedDate() != null ? comment.getDeletedDate().toEpochMilli() : null)")
+    @Mapping(target = "hiddenDate", expression = "java(comment.getHiddenDate() != null ? comment.getHiddenDate().toEpochMilli() : null)")
     CommentsDto mapToDto(Comment comment);
 
     // Map list of comments to DTOs (without replies to avoid ambiguity)

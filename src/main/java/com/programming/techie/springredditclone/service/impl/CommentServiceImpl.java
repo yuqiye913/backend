@@ -1,6 +1,7 @@
 package com.programming.techie.springredditclone.service.impl;
 
 import com.programming.techie.springredditclone.dto.CommentsDto;
+import com.programming.techie.springredditclone.dto.CreateCommentRequest;
 import com.programming.techie.springredditclone.dto.CursorPageResponse;
 import com.programming.techie.springredditclone.exceptions.PostNotFoundException;
 import com.programming.techie.springredditclone.exceptions.SpringRedditException;
@@ -9,9 +10,11 @@ import com.programming.techie.springredditclone.model.Comment;
 import com.programming.techie.springredditclone.model.NotificationEmail;
 import com.programming.techie.springredditclone.model.Post;
 import com.programming.techie.springredditclone.model.User;
+import com.programming.techie.springredditclone.model.VoteType;
 import com.programming.techie.springredditclone.repository.CommentRepository;
 import com.programming.techie.springredditclone.repository.PostRepository;
 import com.programming.techie.springredditclone.repository.UserRepository;
+import com.programming.techie.springredditclone.repository.VoteRepository;
 import com.programming.techie.springredditclone.event.PostCommentedEvent;
 import com.programming.techie.springredditclone.service.AuthService;
 import com.programming.techie.springredditclone.service.BlockService;
@@ -38,6 +41,7 @@ public class CommentServiceImpl implements CommentService {
     private final BlockService blockService;
     private final CursorUtil cursorUtil;
     private final ApplicationEventPublisher eventPublisher;
+    private final VoteRepository voteRepository;
 
     @Override
     public void save(CommentsDto commentsDto) {
@@ -62,6 +66,43 @@ public class CommentServiceImpl implements CommentService {
         // Publish comment event for notification
         eventPublisher.publishEvent(new PostCommentedEvent(this, comment.getUser(), post.getUser(), post, comment));
     }
+    
+    @Override
+    public void createComment(CreateCommentRequest createCommentRequest) {
+        Post post = postRepository.findById(createCommentRequest.getPostId())
+                .orElseThrow(() -> new PostNotFoundException(createCommentRequest.getPostId().toString()));
+        
+        User currentUser = authService.getCurrentUser();
+        User postOwner = post.getUser();
+        
+        // Check if current user is blocked by post owner or has blocked post owner
+        if (blockService.isBlockedByUser(postOwner.getUserId()) || blockService.hasBlockedUser(postOwner.getUserId())) {
+            throw new SpringRedditException("Cannot comment on this post due to block restrictions");
+        }
+        
+        // Check for inappropriate language
+        containsSwearWords(createCommentRequest.getText());
+        
+        // Get parent comment if this is a reply
+        Comment parentComment = null;
+        if (createCommentRequest.getParentCommentId() != null) {
+            parentComment = commentRepository.findById(createCommentRequest.getParentCommentId())
+                    .orElseThrow(() -> new SpringRedditException("Parent comment not found with ID: " + createCommentRequest.getParentCommentId()));
+        }
+        
+        Comment comment = commentMapper.mapToComment(createCommentRequest, post, currentUser, parentComment);
+        commentRepository.save(comment);
+
+        // Increment comment count for the post
+        post.setCommentCount(post.getCommentCount() + 1);
+        postRepository.save(post);
+        
+        // Note: We don't manually update reply count anymore
+        // Reply count is calculated dynamically from the database
+
+        // Publish comment event for notification
+        eventPublisher.publishEvent(new PostCommentedEvent(this, comment.getUser(), post.getUser(), post, comment));
+    }
 
     @Override
     public void deleteComment(Long commentId) {
@@ -82,6 +123,13 @@ public class CommentServiceImpl implements CommentService {
         Post post = comment.getPost();
         post.setCommentCount(Math.max(0, post.getCommentCount() - 1)); // Ensure count doesn't go negative
         postRepository.save(post);
+        
+        // If this was a reply, decrement the parent comment's reply count
+        if (comment.getParentComment() != null) {
+            Comment parentComment = comment.getParentComment();
+            parentComment.setReplyCount(Math.max(0, parentComment.getReplyCount() - 1));
+            commentRepository.save(parentComment);
+        }
     }
 
 
@@ -89,7 +137,6 @@ public class CommentServiceImpl implements CommentService {
     @Override
     public List<CommentsDto> getAllCommentsForPost(Long postId) {
         Post post = postRepository.findById(postId).orElseThrow(() -> new PostNotFoundException(postId.toString()));
-        User currentUser = authService.getCurrentUser();
         
         return commentRepository.findByPost(post)
                 .stream()
@@ -98,7 +145,24 @@ public class CommentServiceImpl implements CommentService {
                     return !blockService.hasBlockedUser(comment.getUser().getUserId()) && 
                            !blockService.isBlockedByUser(comment.getUser().getUserId());
                 })
-                .map(commentMapper::mapToDto).toList();
+                .map(comment -> {
+                    CommentsDto dto = commentMapper.mapToDto(comment);
+                    dto.setUpVote(false);
+                    if (authService.isLoggedIn()) {
+                        try {
+                            User currentUser = authService.getCurrentUser();
+                            voteRepository.findByCommentAndUser(comment, currentUser)
+                                .ifPresent(vote -> {
+                                    if (vote.getVoteType() == VoteType.UPVOTE) {
+                                        dto.setUpVote(true);
+                                    }
+                                });
+                        } catch (Exception e) {
+                            // User not authenticated, keep upVote as false
+                        }
+                    }
+                    return dto;
+                }).toList();
     }
 
     @Override
@@ -129,7 +193,24 @@ public class CommentServiceImpl implements CommentService {
         }
         
         List<CommentsDto> commentDtos = comments.stream()
-                .map(commentMapper::mapToDto)
+                .map(comment -> {
+                    CommentsDto dto = commentMapper.mapToDto(comment);
+                    dto.setUpVote(false);
+                    if (authService.isLoggedIn()) {
+                        try {
+                            User currentUser = authService.getCurrentUser();
+                            voteRepository.findByCommentAndUser(comment, currentUser)
+                                .ifPresent(vote -> {
+                                    if (vote.getVoteType() == VoteType.UPVOTE) {
+                                        dto.setUpVote(true);
+                                    }
+                                });
+                        } catch (Exception e) {
+                            // User not authenticated, keep upVote as false
+                        }
+                    }
+                    return dto;
+                })
                 .toList();
         
         return new CursorPageResponse<>(commentDtos, nextCursor, nextCursor != null, actualLimit);

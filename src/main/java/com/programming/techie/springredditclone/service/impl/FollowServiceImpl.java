@@ -6,6 +6,7 @@ import com.programming.techie.springredditclone.dto.GetFollowingDto;
 import com.programming.techie.springredditclone.dto.FollowerCountDto;
 import com.programming.techie.springredditclone.dto.FollowingCountDto;
 import com.programming.techie.springredditclone.event.UserFollowedEvent;
+import com.programming.techie.springredditclone.exceptions.NotFollowingException;
 import com.programming.techie.springredditclone.model.Follow;
 import com.programming.techie.springredditclone.model.User;
 import com.programming.techie.springredditclone.repository.FollowRepository;
@@ -77,7 +78,7 @@ public class FollowServiceImpl implements FollowService {
         Optional<Follow> existingFollow = followRepository.findByFollowerAndFollowing(follower, following);
         
         if (existingFollow.isEmpty()) {
-            throw new RuntimeException("You are not following this user");
+            throw new NotFollowingException("You are not following this user");
         }
 
         // Delete the follow relationship
@@ -127,16 +128,6 @@ public class FollowServiceImpl implements FollowService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
         
-        // Only check block restrictions if user is authenticated
-        if (authService.isLoggedIn()) {
-            User currentUser = authService.getCurrentUser();
-            
-            // Check if current user is blocked by target user or has blocked target user
-            if (blockService.isBlockedByUser(userId) || blockService.hasBlockedUser(userId)) {
-                throw new RuntimeException("Cannot view follower count due to block restrictions");
-            }
-        }
-        
         Long followerCount = followRepository.countFollowersByUser(user);
         
         return followMapper.mapToFollowerCountDto(user, followerCount);
@@ -147,20 +138,18 @@ public class FollowServiceImpl implements FollowService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
         
-        // Only check block restrictions if user is authenticated
-        if (authService.isLoggedIn()) {
-            User currentUser = authService.getCurrentUser();
-            
-            // Check if current user is blocked by target user or has blocked target user
-            if (blockService.isBlockedByUser(userId) || blockService.hasBlockedUser(userId)) {
-                throw new RuntimeException("Cannot view following count due to block restrictions");
-            }
-        }
-        
         Long followingCount = followRepository.countFollowingByUser(user);
         
         return followMapper.mapToFollowingCountDto(user, followingCount);
     }
 
+    @Override
+    public boolean isFollowingUser(Long followingId) {
+        User follower = authService.getCurrentUser();
+        User following = userRepository.findById(followingId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        
+        return followRepository.existsByFollowerAndFollowing(follower, following);
+    }
 
 }

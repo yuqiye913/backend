@@ -7,6 +7,7 @@ import com.programming.techie.springredditclone.dto.GetFollowersDto;
 import com.programming.techie.springredditclone.dto.GetFollowingDto;
 import com.programming.techie.springredditclone.dto.FollowerCountDto;
 import com.programming.techie.springredditclone.dto.FollowingCountDto;
+import com.programming.techie.springredditclone.exceptions.NotFollowingException;
 import com.programming.techie.springredditclone.service.FollowService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -173,16 +174,18 @@ class FollowControllerTest {
     }
 
     @Test
-    @DisplayName("Should handle service exception when unfollowing")
+    @DisplayName("Should handle not following exception when unfollowing")
     @WithMockUser(username = "testuser")
-    void shouldHandleServiceExceptionWhenUnfollowing() throws Exception {
+    void shouldHandleNotFollowingExceptionWhenUnfollowing() throws Exception {
         // Given
-        doThrow(new RuntimeException("You are not following this user"))
+        doThrow(new NotFollowingException("You are not following this user"))
                 .when(followService).unfollowUser(eq(999L));
 
         // When & Then
         mockMvc.perform(delete("/api/follow/follow/999"))
-                .andExpect(status().isInternalServerError());
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("Not Following"))
+                .andExpect(jsonPath("$.message").value("You are not following this user"));
 
         verify(followService).unfollowUser(999L);
     }
@@ -453,5 +456,150 @@ class FollowControllerTest {
         // When & Then
         mockMvc.perform(get("/api/follow/following/1"))
                 .andExpect(status().isForbidden());
+    }
+
+    // ========== IS FOLLOWING USER TESTS ==========
+    @Test
+    @DisplayName("Should return true when user is following another user")
+    @WithMockUser(username = "testuser")
+    void shouldReturnTrueWhenUserIsFollowing() throws Exception {
+        // Given
+        when(followService.isFollowingUser(eq(2L))).thenReturn(true);
+
+        // When & Then
+        mockMvc.perform(get("/api/follow/is-following/2"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").value(true));
+
+        verify(followService).isFollowingUser(2L);
+    }
+
+    @Test
+    @DisplayName("Should return false when user is not following another user")
+    @WithMockUser(username = "testuser")
+    void shouldReturnFalseWhenUserIsNotFollowing() throws Exception {
+        // Given
+        when(followService.isFollowingUser(eq(2L))).thenReturn(false);
+
+        // When & Then
+        mockMvc.perform(get("/api/follow/is-following/2"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").value(false));
+
+        verify(followService).isFollowingUser(2L);
+    }
+
+    @Test
+    @DisplayName("Should handle service exception when checking follow status")
+    @WithMockUser(username = "testuser")
+    void shouldHandleServiceExceptionWhenCheckingFollowStatus() throws Exception {
+        // Given
+        doThrow(new RuntimeException("User not found"))
+                .when(followService).isFollowingUser(eq(999L));
+
+        // When & Then
+        mockMvc.perform(get("/api/follow/is-following/999"))
+                .andExpect(status().isInternalServerError());
+
+        verify(followService).isFollowingUser(999L);
+    }
+
+    @Test
+    @DisplayName("Should require authentication for is-following endpoint")
+    void shouldRequireAuthenticationForIsFollowingEndpoint() throws Exception {
+        // When & Then
+        mockMvc.perform(get("/api/follow/is-following/1"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("Should handle invalid user ID format")
+    @WithMockUser(username = "testuser")
+    void shouldHandleInvalidUserIdFormat() throws Exception {
+        // When & Then
+        mockMvc.perform(get("/api/follow/is-following/invalid"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("Should handle large user ID")
+    @WithMockUser(username = "testuser")
+    void shouldHandleLargeUserId() throws Exception {
+        // Given
+        when(followService.isFollowingUser(eq(999999L))).thenReturn(false);
+
+        // When & Then
+        mockMvc.perform(get("/api/follow/is-following/999999"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").value(false));
+
+        verify(followService).isFollowingUser(999999L);
+    }
+
+    @Test
+    @DisplayName("Should handle zero user ID")
+    @WithMockUser(username = "testuser")
+    void shouldHandleZeroUserId() throws Exception {
+        // Given
+        when(followService.isFollowingUser(eq(0L))).thenReturn(false);
+
+        // When & Then
+        mockMvc.perform(get("/api/follow/is-following/0"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").value(false));
+
+        verify(followService).isFollowingUser(0L);
+    }
+
+    @Test
+    @DisplayName("Should handle negative user ID")
+    @WithMockUser(username = "testuser")
+    void shouldHandleNegativeUserId() throws Exception {
+        // When & Then
+        mockMvc.perform(get("/api/follow/is-following/-1"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("Should verify correct response format for is-following endpoint")
+    @WithMockUser(username = "testuser")
+    void shouldVerifyCorrectResponseFormatForIsFollowingEndpoint() throws Exception {
+        // Given
+        when(followService.isFollowingUser(eq(2L))).thenReturn(true);
+
+        // When & Then
+        mockMvc.perform(get("/api/follow/is-following/2"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isBoolean())
+                .andExpect(jsonPath("$").value(true));
+
+        verify(followService).isFollowingUser(2L);
+    }
+
+    @Test
+    @DisplayName("Should handle multiple consecutive follow status checks")
+    @WithMockUser(username = "testuser")
+    void shouldHandleMultipleConsecutiveFollowStatusChecks() throws Exception {
+        // Given
+        when(followService.isFollowingUser(eq(1L))).thenReturn(true);
+        when(followService.isFollowingUser(eq(2L))).thenReturn(false);
+        when(followService.isFollowingUser(eq(3L))).thenReturn(true);
+
+        // When & Then
+        mockMvc.perform(get("/api/follow/is-following/1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").value(true));
+
+        mockMvc.perform(get("/api/follow/is-following/2"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").value(false));
+
+        mockMvc.perform(get("/api/follow/is-following/3"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").value(true));
+
+        verify(followService).isFollowingUser(1L);
+        verify(followService).isFollowingUser(2L);
+        verify(followService).isFollowingUser(3L);
     }
 } 

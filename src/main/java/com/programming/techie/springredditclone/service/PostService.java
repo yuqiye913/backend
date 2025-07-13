@@ -48,6 +48,15 @@ public interface PostService {
     CursorPageResponse<PostResponse> getPostsByUsername(String username, String cursor, int limit);
     
     /**
+     * Get posts by user ID with cursor-based pagination
+     * @param userId User ID
+     * @param cursor Cursor for pagination (optional)
+     * @param limit Number of posts to return
+     * @return Cursor page response
+     */
+    CursorPageResponse<PostResponse> getPostsByUserId(Long userId, String cursor, int limit);
+    
+    /**
      * Get posts that belong to any of the specified subreddits
      * @param subredditNames List of subreddit names
      * @return List of post responses

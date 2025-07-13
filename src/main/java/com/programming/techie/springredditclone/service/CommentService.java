@@ -1,6 +1,7 @@
 package com.programming.techie.springredditclone.service;
 
 import com.programming.techie.springredditclone.dto.CommentsDto;
+import com.programming.techie.springredditclone.dto.CreateCommentRequest;
 import com.programming.techie.springredditclone.dto.CursorPageResponse;
 
 import java.util.List;
@@ -12,6 +13,12 @@ public interface CommentService {
      * @param commentsDto Comment data to save
      */
     void save(CommentsDto commentsDto);
+    
+    /**
+     * Create a new comment using CreateCommentRequest
+     * @param createCommentRequest Comment creation request
+     */
+    void createComment(CreateCommentRequest createCommentRequest);
     
     /**
      * Get all comments for a specific post

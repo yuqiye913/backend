@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
@@ -210,5 +211,244 @@ class FollowRepositoryTest {
         Optional<Follow> foundFollow = followRepository.findById(follow1.getId());
         assertThat(foundFollow).isPresent();
         assertThat(foundFollow.get().isActive()).isFalse();
+    }
+
+    // ========== FOLLOW CONDITION TESTS ==========
+    @Test
+    @DisplayName("Should return true when user is following another user")
+    void shouldReturnTrueWhenUserIsFollowing() {
+        // When
+        boolean isFollowing = followRepository.existsByFollowerAndFollowing(user1, user2);
+
+        // Then
+        assertThat(isFollowing).isTrue();
+    }
+
+    @Test
+    @DisplayName("Should return false when user is not following another user")
+    void shouldReturnFalseWhenUserIsNotFollowing() {
+        // When
+        boolean isFollowing = followRepository.existsByFollowerAndFollowing(user2, user1);
+
+        // Then
+        assertThat(isFollowing).isFalse();
+    }
+
+    @Test
+    @DisplayName("Should return false when checking self-follow condition")
+    void shouldReturnFalseWhenCheckingSelfFollowCondition() {
+        // When
+        boolean isFollowing = followRepository.existsByFollowerAndFollowing(user1, user1);
+
+        // Then
+        assertThat(isFollowing).isFalse();
+    }
+
+    @Test
+    @DisplayName("Should handle multiple follow conditions correctly")
+    void shouldHandleMultipleFollowConditions() {
+        // When
+        boolean user1FollowingUser2 = followRepository.existsByFollowerAndFollowing(user1, user2);
+        boolean user1FollowingUser3 = followRepository.existsByFollowerAndFollowing(user1, user3);
+        boolean user2FollowingUser1 = followRepository.existsByFollowerAndFollowing(user2, user1);
+        boolean user3FollowingUser1 = followRepository.existsByFollowerAndFollowing(user3, user1);
+
+        // Then
+        assertThat(user1FollowingUser2).isTrue();
+        assertThat(user1FollowingUser3).isTrue();
+        assertThat(user2FollowingUser1).isFalse();
+        assertThat(user3FollowingUser1).isFalse();
+    }
+
+    @Test
+    @DisplayName("Should handle follow condition after follow relationship is deleted")
+    void shouldHandleFollowConditionAfterDeletion() {
+        // Given
+        boolean beforeDeletion = followRepository.existsByFollowerAndFollowing(user1, user2);
+        assertThat(beforeDeletion).isTrue();
+
+        // When
+        followRepository.delete(follow1);
+        boolean afterDeletion = followRepository.existsByFollowerAndFollowing(user1, user2);
+
+        // Then
+        assertThat(afterDeletion).isFalse();
+    }
+
+    @Test
+    @DisplayName("Should handle follow condition with inactive follow relationship")
+    void shouldHandleFollowConditionWithInactiveFollow() {
+        // Given
+        follow1.setActive(false);
+        followRepository.save(follow1);
+
+        // When
+        boolean isFollowing = followRepository.existsByFollowerAndFollowing(user1, user2);
+
+        // Then
+        assertThat(isFollowing).isTrue(); // existsByFollowerAndFollowing doesn't check active status
+    }
+
+    @Test
+    @DisplayName("Should handle follow condition with new follow relationship")
+    void shouldHandleFollowConditionWithNewFollow() {
+        // Given
+        User newUser = new User();
+        newUser.setUsername("newuser");
+        newUser.setEmail("newuser@example.com");
+        newUser.setPassword("password");
+        newUser.setCreated(Instant.now());
+        newUser.setEnabled(true);
+        newUser = userRepository.save(newUser);
+
+        // When - Before creating follow relationship
+        boolean beforeFollow = followRepository.existsByFollowerAndFollowing(user1, newUser);
+
+        // Then
+        assertThat(beforeFollow).isFalse();
+
+        // When - After creating follow relationship
+        Follow newFollow = new Follow();
+        newFollow.setFollower(user1);
+        newFollow.setFollowing(newUser);
+        newFollow.setActive(true);
+        followRepository.save(newFollow);
+
+        boolean afterFollow = followRepository.existsByFollowerAndFollowing(user1, newUser);
+
+        // Then
+        assertThat(afterFollow).isTrue();
+    }
+
+    @Test
+    @DisplayName("Should handle bidirectional follow conditions")
+    void shouldHandleBidirectionalFollowConditions() {
+        // Given - Create bidirectional follow relationship
+        Follow reverseFollow = new Follow();
+        reverseFollow.setFollower(user2);
+        reverseFollow.setFollowing(user1);
+        reverseFollow.setActive(true);
+        followRepository.save(reverseFollow);
+
+        // When
+        boolean user1FollowingUser2 = followRepository.existsByFollowerAndFollowing(user1, user2);
+        boolean user2FollowingUser1 = followRepository.existsByFollowerAndFollowing(user2, user1);
+
+        // Then
+        assertThat(user1FollowingUser2).isTrue();
+        assertThat(user2FollowingUser1).isTrue();
+    }
+
+    @Test
+    @DisplayName("Should handle follow condition with null parameters")
+    void shouldHandleFollowConditionWithNullParameters() {
+        // When & Then
+        assertThatThrownBy(() -> followRepository.existsByFollowerAndFollowing(null, user2))
+                .isInstanceOf(Exception.class);
+
+        assertThatThrownBy(() -> followRepository.existsByFollowerAndFollowing(user1, null))
+                .isInstanceOf(Exception.class);
+
+        assertThatThrownBy(() -> followRepository.existsByFollowerAndFollowing(null, null))
+                .isInstanceOf(Exception.class);
+    }
+
+    @Test
+    @DisplayName("Should handle follow condition with non-existent users")
+    void shouldHandleFollowConditionWithNonExistentUsers() {
+        // Given
+        User nonExistentUser = new User();
+        nonExistentUser.setUserId(999L);
+
+        // When & Then
+        assertThatThrownBy(() -> followRepository.existsByFollowerAndFollowing(nonExistentUser, user2))
+                .isInstanceOf(Exception.class);
+
+        assertThatThrownBy(() -> followRepository.existsByFollowerAndFollowing(user1, nonExistentUser))
+                .isInstanceOf(Exception.class);
+    }
+
+    @Test
+    @DisplayName("Should handle follow condition performance with multiple relationships")
+    void shouldHandleFollowConditionPerformanceWithMultipleRelationships() {
+        // Given - Create multiple follow relationships
+        User user4 = new User();
+        user4.setUsername("user4");
+        user4.setEmail("user4@example.com");
+        user4.setPassword("password");
+        user4.setCreated(Instant.now());
+        user4.setEnabled(true);
+        user4 = userRepository.save(user4);
+
+        User user5 = new User();
+        user5.setUsername("user5");
+        user5.setEmail("user5@example.com");
+        user5.setPassword("password");
+        user5.setCreated(Instant.now());
+        user5.setEnabled(true);
+        user5 = userRepository.save(user5);
+
+        // Create follow relationships
+        Follow follow3 = new Follow();
+        follow3.setFollower(user1);
+        follow3.setFollowing(user4);
+        follow3.setActive(true);
+        followRepository.save(follow3);
+
+        Follow follow4 = new Follow();
+        follow4.setFollower(user1);
+        follow4.setFollowing(user5);
+        follow4.setActive(true);
+        followRepository.save(follow4);
+
+        // When
+        boolean user1FollowingUser2 = followRepository.existsByFollowerAndFollowing(user1, user2);
+        boolean user1FollowingUser3 = followRepository.existsByFollowerAndFollowing(user1, user3);
+        boolean user1FollowingUser4 = followRepository.existsByFollowerAndFollowing(user1, user4);
+        boolean user1FollowingUser5 = followRepository.existsByFollowerAndFollowing(user1, user5);
+
+        // Then
+        assertThat(user1FollowingUser2).isTrue();
+        assertThat(user1FollowingUser3).isTrue();
+        assertThat(user1FollowingUser4).isTrue();
+        assertThat(user1FollowingUser5).isTrue();
+    }
+
+    @Test
+    @DisplayName("Should handle follow condition with edge case user IDs")
+    void shouldHandleFollowConditionWithEdgeCaseUserIds() {
+        // Given - Create users with edge case IDs
+        User userWithZeroId = new User();
+        userWithZeroId.setUserId(0L);
+        userWithZeroId.setUsername("userZero");
+        userWithZeroId.setEmail("userZero@example.com");
+        userWithZeroId.setPassword("password");
+        userWithZeroId.setCreated(Instant.now());
+        userWithZeroId.setEnabled(true);
+        userWithZeroId = userRepository.save(userWithZeroId);
+
+        User userWithLargeId = new User();
+        userWithLargeId.setUserId(Long.MAX_VALUE);
+        userWithLargeId.setUsername("userLarge");
+        userWithLargeId.setEmail("userLarge@example.com");
+        userWithLargeId.setPassword("password");
+        userWithLargeId.setCreated(Instant.now());
+        userWithLargeId.setEnabled(true);
+        userWithLargeId = userRepository.save(userWithLargeId);
+
+        // Create follow relationship
+        Follow edgeCaseFollow = new Follow();
+        edgeCaseFollow.setFollower(userWithZeroId);
+        edgeCaseFollow.setFollowing(userWithLargeId);
+        edgeCaseFollow.setActive(true);
+        followRepository.save(edgeCaseFollow);
+
+        // When
+        boolean zeroFollowingLarge = followRepository.existsByFollowerAndFollowing(userWithZeroId, userWithLargeId);
+        boolean largeFollowingZero = followRepository.existsByFollowerAndFollowing(userWithLargeId, userWithZeroId);
+
+        // Then
+        assertThat(zeroFollowingLarge).isTrue();
+        assertThat(largeFollowingZero).isFalse();
     }
 } 

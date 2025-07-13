@@ -1,7 +1,6 @@
 package com.programming.techie.springredditclone.service.impl;
 
-import com.programming.techie.springredditclone.dto.CommentVoteRequest;
-import com.programming.techie.springredditclone.dto.VoteDto;
+import com.programming.techie.springredditclone.dto.VoteStatusDto;
 import com.programming.techie.springredditclone.event.PostLikedEvent;
 import com.programming.techie.springredditclone.exceptions.PostNotFoundException;
 import com.programming.techie.springredditclone.exceptions.SpringRedditException;
@@ -16,7 +15,6 @@ import com.programming.techie.springredditclone.repository.VoteRepository;
 import com.programming.techie.springredditclone.service.AuthService;
 import com.programming.techie.springredditclone.service.BlockService;
 import com.programming.techie.springredditclone.service.VoteService;
-import com.programming.techie.springredditclone.mapper.VoteMapper;
 import lombok.AllArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -35,55 +33,39 @@ public class VoteServiceImpl implements VoteService {
     private final CommentRepository commentRepository;
     private final AuthService authService;
     private final BlockService blockService;
-    private final VoteMapper voteMapper;
     private final ApplicationEventPublisher eventPublisher;
 
     @Override
     @Transactional
-    public void vote(VoteDto voteDto) {
-        Post post = postRepository.findById(voteDto.getPostId())
-                .orElseThrow(() -> new PostNotFoundException("Post Not Found with ID - " + voteDto.getPostId()));
+    public void likePost(Long postId) {
+        Post post = postRepository.findById(postId)
+                .orElseThrow(() -> new PostNotFoundException("Post Not Found with ID - " + postId));
         
         User currentUser = authService.getCurrentUser();
         User postOwner = post.getUser();
         
         // Check if current user is blocked by post owner or has blocked post owner
         if (blockService.isBlockedByUser(postOwner.getUserId()) || blockService.hasBlockedUser(postOwner.getUserId())) {
-            throw new SpringRedditException("Cannot vote on this post due to block restrictions");
+            throw new SpringRedditException("Cannot like this post due to block restrictions");
         }
         
         Optional<Vote> existingVote = voteRepository.findByPostAndUser(post, currentUser);
         
         if (existingVote.isPresent()) {
-            // User has already voted - check if it's the same vote type
-            Vote vote = existingVote.get();
-            VoteType oldVoteType = vote.getVoteType();
-            VoteType newVoteType = voteDto.getVoteType();
-            
-            if (oldVoteType.equals(newVoteType)) {
-                // Same vote type - remove the vote (toggle off)
-                post.setVoteCount(post.getVoteCount() - oldVoteType.getDirection());
-                voteRepository.delete(vote);
-            } else {
-                // Different vote type - change the vote
-                post.setVoteCount(post.getVoteCount() - oldVoteType.getDirection() + newVoteType.getDirection());
-                vote.setVoteType(newVoteType);
-                voteRepository.save(vote);
-            }
+            // User has already liked - do nothing (idempotent)
+            return;
         } else {
-            // User hasn't voted yet - create new vote
-            boolean isNewUpvote = UPVOTE.equals(voteDto.getVoteType());
-            if (isNewUpvote) {
-                post.setVoteCount(post.getVoteCount() + 1);
-            } else {
-                post.setVoteCount(post.getVoteCount() - 1);
-            }
-            voteRepository.save(voteMapper.mapToVote(voteDto, post, currentUser));
+            // User hasn't liked yet - create new like
+            post.setVoteCount(post.getVoteCount() + 1);
+            Vote newVote = Vote.builder()
+                    .voteType(UPVOTE)
+                    .post(post)
+                    .user(currentUser)
+                    .build();
+            voteRepository.save(newVote);
             
-            // Publish event for new upvote (like)
-            if (isNewUpvote) {
-                eventPublisher.publishEvent(new PostLikedEvent(this, currentUser, post.getUser(), post));
-            }
+            // Publish event for new like
+            eventPublisher.publishEvent(new PostLikedEvent(this, currentUser, post.getUser(), post));
         }
         
         postRepository.save(post);
@@ -91,46 +73,65 @@ public class VoteServiceImpl implements VoteService {
 
     @Override
     @Transactional
-    public void voteOnComment(CommentVoteRequest commentVoteRequest) {
-        Comment comment = commentRepository.findById(commentVoteRequest.getCommentId())
-                .orElseThrow(() -> new SpringRedditException("Comment Not Found with ID - " + commentVoteRequest.getCommentId()));
+    public void unlikePost(Long postId) {
+        Post post = postRepository.findById(postId)
+                .orElseThrow(() -> new PostNotFoundException("Post Not Found with ID - " + postId));
+        
+        User currentUser = authService.getCurrentUser();
+        
+        Optional<Vote> existingVote = voteRepository.findByPostAndUser(post, currentUser);
+        
+        if (existingVote.isPresent()) {
+            Vote vote = existingVote.get();
+            // Remove the like and adjust count
+            post.setVoteCount(post.getVoteCount() - 1);
+            voteRepository.delete(vote);
+            postRepository.save(post);
+        } else {
+            // User hasn't liked - do nothing (idempotent)
+            return;
+        }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public VoteStatusDto getPostLikeStatus(Long postId) {
+        Post post = postRepository.findById(postId)
+                .orElseThrow(() -> new PostNotFoundException("Post Not Found with ID - " + postId));
+        
+        User currentUser = authService.getCurrentUser();
+        Optional<Vote> existingVote = voteRepository.findByPostAndUser(post, currentUser);
+        
+        return VoteStatusDto.builder()
+                .isLiked(existingVote.isPresent())
+                .likeCount(post.getVoteCount())
+                .build();
+    }
+
+    @Override
+    @Transactional
+    public void likeComment(Long commentId) {
+        Comment comment = commentRepository.findById(commentId)
+                .orElseThrow(() -> new SpringRedditException("Comment Not Found with ID - " + commentId));
         
         User currentUser = authService.getCurrentUser();
         User commentOwner = comment.getUser();
         
         // Check if current user is blocked by comment owner or has blocked comment owner
         if (blockService.isBlockedByUser(commentOwner.getUserId()) || blockService.hasBlockedUser(commentOwner.getUserId())) {
-            throw new SpringRedditException("Cannot vote on this comment due to block restrictions");
+            throw new SpringRedditException("Cannot like this comment due to block restrictions");
         }
         
         Optional<Vote> existingVote = voteRepository.findByCommentAndUser(comment, currentUser);
         
         if (existingVote.isPresent()) {
-            // User has already voted - check if it's the same vote type
-            Vote vote = existingVote.get();
-            VoteType oldVoteType = vote.getVoteType();
-            VoteType newVoteType = commentVoteRequest.getVoteType();
-            
-            if (oldVoteType.equals(newVoteType)) {
-                // Same vote type - remove the vote (toggle off)
-                comment.setVoteCount(comment.getVoteCount() - oldVoteType.getDirection());
-                voteRepository.delete(vote);
-            } else {
-                // Different vote type - change the vote
-                comment.setVoteCount(comment.getVoteCount() - oldVoteType.getDirection() + newVoteType.getDirection());
-                vote.setVoteType(newVoteType);
-                voteRepository.save(vote);
-            }
+            // User has already liked - do nothing (idempotent)
+            return;
         } else {
-            // User hasn't voted yet - create new vote
-            if (UPVOTE.equals(commentVoteRequest.getVoteType())) {
-                comment.setVoteCount(comment.getVoteCount() + 1);
-            } else {
-                comment.setVoteCount(comment.getVoteCount() - 1);
-            }
-            
+            // User hasn't liked yet - create new like
+            comment.setVoteCount(comment.getVoteCount() + 1);
             Vote newVote = Vote.builder()
-                    .voteType(commentVoteRequest.getVoteType())
+                    .voteType(UPVOTE)
                     .comment(comment)
                     .user(currentUser)
                     .build();
@@ -141,10 +142,39 @@ public class VoteServiceImpl implements VoteService {
     }
 
     @Override
-    public Integer getCommentVoteCount(Long commentId) {
+    @Transactional
+    public void unlikeComment(Long commentId) {
         Comment comment = commentRepository.findById(commentId)
                 .orElseThrow(() -> new SpringRedditException("Comment Not Found with ID - " + commentId));
-        return comment.getVoteCount();
+        
+        User currentUser = authService.getCurrentUser();
+        
+        Optional<Vote> existingVote = voteRepository.findByCommentAndUser(comment, currentUser);
+        
+        if (existingVote.isPresent()) {
+            Vote vote = existingVote.get();
+            // Remove the like and adjust count
+            comment.setVoteCount(comment.getVoteCount() - 1);
+            voteRepository.delete(vote);
+            commentRepository.save(comment);
+        } else {
+            // User hasn't liked - do nothing (idempotent)
+            return;
+        }
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public VoteStatusDto getCommentLikeStatus(Long commentId) {
+        Comment comment = commentRepository.findById(commentId)
+                .orElseThrow(() -> new SpringRedditException("Comment Not Found with ID - " + commentId));
+        
+        User currentUser = authService.getCurrentUser();
+        Optional<Vote> existingVote = voteRepository.findByCommentAndUser(comment, currentUser);
+        
+        return VoteStatusDto.builder()
+                .isLiked(existingVote.isPresent())
+                .likeCount(comment.getVoteCount())
+                .build();
+    }
 } 

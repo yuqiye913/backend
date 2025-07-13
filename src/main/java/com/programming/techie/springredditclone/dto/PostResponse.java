@@ -15,6 +15,7 @@ public class PostResponse {
     private String url;
     private String description;
     private String userName;
+    private Long userId;  // Add user ID for frontend follow functionality
     private String subredditName;  // Keep for backward compatibility
     private List<String> subredditNames;  // Multiple subreddits
     private Integer voteCount;

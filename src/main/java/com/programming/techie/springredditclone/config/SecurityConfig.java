@@ -65,6 +65,13 @@ public class SecurityConfig {
                         .permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/posts/search")
                         .permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/comments/post/**")
+                        .permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/comments/*/replies")
+                        .permitAll()
+                        // Vote endpoints require authentication
+                        .requestMatchers("/api/votes/**")
+                        .authenticated()
                         .requestMatchers("/v2/api-docs",
                                 "/configuration/ui",
                                 "/swagger-resources/**",

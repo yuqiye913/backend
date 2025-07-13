@@ -305,17 +305,57 @@ GET /api/comments/by-post/{postId}
 GET /api/comments/by-user/{userName}
 ```
 
-### Vote Endpoints
+### Like Endpoints
 
-#### 1. Vote on Post
+#### 1. Like Post
 ```http
-POST /api/votes
+POST /api/votes/posts/{postId}/like
 Authorization: Bearer {jwt_token}
-Content-Type: application/json
+```
 
+#### 2. Unlike Post
+```http
+DELETE /api/votes/posts/{postId}/like
+Authorization: Bearer {jwt_token}
+```
+
+#### 3. Get Post Like Status
+```http
+GET /api/votes/posts/{postId}/like
+Authorization: Bearer {jwt_token}
+```
+
+Response:
+```json
 {
-  "voteType": "UPVOTE",
-  "postId": 1
+  "isLiked": true,
+  "likeCount": 5
+}
+```
+
+#### 4. Like Comment
+```http
+POST /api/votes/comments/{commentId}/like
+Authorization: Bearer {jwt_token}
+```
+
+#### 5. Unlike Comment
+```http
+DELETE /api/votes/comments/{commentId}/like
+Authorization: Bearer {jwt_token}
+```
+
+#### 6. Get Comment Like Status
+```http
+GET /api/votes/comments/{commentId}/like
+Authorization: Bearer {jwt_token}
+```
+
+Response:
+```json
+{
+  "isLiked": false,
+  "likeCount": 0
 }
 ```
 

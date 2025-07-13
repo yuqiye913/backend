@@ -61,6 +61,15 @@ public class PostController {
         return status(HttpStatus.OK).body(postService.getPostsByUsername(username, cursor, limit));
     }
 
+    @GetMapping(params = "userId")
+    public ResponseEntity<CursorPageResponse<PostResponse>> getPostsByUserId(
+            @RequestParam Long userId,
+            @RequestParam(required = false) String cursor,
+            @RequestParam(defaultValue = "10") int limit) {
+        
+        return status(HttpStatus.OK).body(postService.getPostsByUserId(userId, cursor, limit));
+    }
+
     @GetMapping("/by-subreddits")
     public ResponseEntity<List<PostResponse>> getPostsByMultipleSubreddits(@RequestParam List<String> subredditNames) {
         return status(HttpStatus.OK).body(postService.getPostsByMultipleSubreddits(subredditNames));

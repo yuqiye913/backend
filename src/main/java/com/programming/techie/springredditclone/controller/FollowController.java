@@ -9,6 +9,8 @@ import com.programming.techie.springredditclone.dto.GetFollowersDto;
 import com.programming.techie.springredditclone.dto.GetFollowingDto;
 import com.programming.techie.springredditclone.dto.FollowerCountDto;
 import com.programming.techie.springredditclone.dto.FollowingCountDto;
+import com.programming.techie.springredditclone.dto.FollowStatusDto;
+import com.programming.techie.springredditclone.dto.FollowResponseDto;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -29,16 +31,24 @@ public class FollowController {
 
     @PostMapping("/follow")
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<String> followUser(@Valid @RequestBody FollowRequestDto followRequest) {
+    public ResponseEntity<FollowResponseDto> followUser(@Valid @RequestBody FollowRequestDto followRequest) {
         followService.followUser(followRequest);
-        return ResponseEntity.ok("Successfully followed user");
+        FollowResponseDto response = new FollowResponseDto();
+        response.setMessage("Successfully followed user");
+        response.setSuccess(true);
+        response.setFollowingId(followRequest.getFollowingId());
+        return ResponseEntity.ok(response);
     }
 
     @DeleteMapping("/follow/{followingId}")
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<String> unfollowUser(@PathVariable Long followingId) {
+    public ResponseEntity<FollowResponseDto> unfollowUser(@PathVariable Long followingId) {
         followService.unfollowUser(followingId);
-        return ResponseEntity.ok("Successfully unfollowed user");
+        FollowResponseDto response = new FollowResponseDto();
+        response.setMessage("Successfully unfollowed user");
+        response.setSuccess(true);
+        response.setFollowingId(followingId);
+        return ResponseEntity.ok(response);
     }
 
     @GetMapping("/followers/{userId}")
@@ -65,5 +75,16 @@ public class FollowController {
     public ResponseEntity<FollowingCountDto> getFollowingCountByUserId(@PathVariable Long userId) {
         FollowingCountDto followingCount = followService.getFollowingCountByUserId(userId);
         return ResponseEntity.ok(followingCount);
+    }
+    
+    @GetMapping("/is-following/{followingId}")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<FollowStatusDto> isFollowingUser(@PathVariable Long followingId) {
+        boolean isFollowing = followService.isFollowingUser(followingId);
+        FollowStatusDto response = new FollowStatusDto();
+        response.setUserId(followingId);
+        response.setFollowing(isFollowing);
+        response.setMessage(isFollowing ? "User is following" : "User is not following");
+        return ResponseEntity.ok(response);
     }
 }

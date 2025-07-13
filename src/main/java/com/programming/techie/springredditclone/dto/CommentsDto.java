@@ -18,7 +18,7 @@ public class CommentsDto {
     private Long id;
     @NotNull(message = "Post ID is required")
     private Long postId;
-    private Instant createdDate;
+    private Long createdDate;
     @NotBlank(message = "Comment text is required")
     private String text;
     private String userName;
@@ -31,18 +31,21 @@ public class CommentsDto {
     // Comment metadata
     private Integer voteCount;
     private boolean isEdited;
-    private Instant editedDate;
+    private Long editedDate;
     private boolean isDeleted;
-    private Instant deletedDate;
+    private Long deletedDate;
     private String deletedBy;
     
     // Comment status
     private boolean isHidden;
     private String hiddenReason;
     private String hiddenBy;
-    private Instant hiddenDate;
+    private Long hiddenDate;
     
     // User info
     private String userDisplayName;
     private String userProfilePicture;
+
+    // Indicates if the current user liked this comment
+    private boolean upVote;
 }

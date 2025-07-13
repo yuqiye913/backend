@@ -174,7 +174,16 @@ public class PostServiceImpl implements PostService {
         }
         
         List<PostResponse> postResponses = posts.stream()
-                .map(postMapper::mapToDto)
+                .map(post -> {
+                    PostResponse response = postMapper.mapToDto(post);
+                    // Add vote status if user is authenticated
+                    if (authService.isLoggedIn()) {
+                        User currentUser = authService.getCurrentUser();
+                        response.setUpVote(isPostUpVoted(post, currentUser));
+                        response.setDownVote(isPostDownVoted(post, currentUser));
+                    }
+                    return response;
+                })
                 .collect(Collectors.toList());
         
         String nextCursor = null;
@@ -209,7 +218,16 @@ public class PostServiceImpl implements PostService {
         }
         
         List<PostResponse> postResponses = posts.stream()
-                .map(postMapper::mapToDto)
+                .map(post -> {
+                    PostResponse response = postMapper.mapToDto(post);
+                    // Add vote status if user is authenticated
+                    if (authService.isLoggedIn()) {
+                        User currentUser = authService.getCurrentUser();
+                        response.setUpVote(isPostUpVoted(post, currentUser));
+                        response.setDownVote(isPostDownVoted(post, currentUser));
+                    }
+                    return response;
+                })
                 .collect(Collectors.toList());
         
         String nextCursor = null;
@@ -255,7 +273,71 @@ public class PostServiceImpl implements PostService {
         }
 
         List<PostResponse> postResponses = posts.stream()
-                .map(postMapper::mapToDto)
+                .map(post -> {
+                    PostResponse response = postMapper.mapToDto(post);
+                    // Add vote status if user is authenticated
+                    if (authService.isLoggedIn()) {
+                        User currentUser = authService.getCurrentUser();
+                        response.setUpVote(isPostUpVoted(post, currentUser));
+                        response.setDownVote(isPostDownVoted(post, currentUser));
+                    }
+                    return response;
+                })
+                .collect(Collectors.toList());
+
+        String nextCursor = null;
+        if (hasMore && !posts.isEmpty()) {
+            Post lastPost = posts.get(posts.size() - 1);
+            nextCursor = cursorUtil.encodeCursor(lastPost.getCreatedDate(), lastPost.getPostId());
+        }
+
+        return new CursorPageResponse<>(postResponses, nextCursor, hasMore, limit);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public CursorPageResponse<PostResponse> getPostsByUserId(Long userId, String cursor, int limit) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found with ID - " + userId));
+
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication != null
+                && !(authentication instanceof AnonymousAuthenticationToken)
+                && authentication.isAuthenticated()
+                && authentication.getPrincipal() instanceof Jwt) {
+            User currentUser = authService.getCurrentUser();
+            if (blockService.isBlockedByUser(user.getUserId()) || blockService.hasBlockedUser(user.getUserId())) {
+                throw new SpringRedditException("Cannot view posts due to block restrictions");
+            }
+        }
+
+        Instant createdDate = Instant.now();
+        Long postId = Long.MAX_VALUE;
+
+        if (cursor != null && !cursor.isEmpty()) {
+            CursorUtil.CursorData cursorData = cursorUtil.decodeCursor(cursor);
+            createdDate = cursorData.getCreatedDate();
+            postId = cursorData.getId();
+        }
+
+        List<Post> posts = postRepository.findByUserWithCursor(user, createdDate, postId, PageRequest.of(0, limit + 1));
+
+        boolean hasMore = posts.size() > limit;
+        if (hasMore) {
+            posts = posts.subList(0, limit);
+        }
+
+        List<PostResponse> postResponses = posts.stream()
+                .map(post -> {
+                    PostResponse response = postMapper.mapToDto(post);
+                    // Add vote status if user is authenticated
+                    if (authService.isLoggedIn()) {
+                        User currentUser = authService.getCurrentUser();
+                        response.setUpVote(isPostUpVoted(post, currentUser));
+                        response.setDownVote(isPostDownVoted(post, currentUser));
+                    }
+                    return response;
+                })
                 .collect(Collectors.toList());
 
         String nextCursor = null;
@@ -370,7 +452,16 @@ public class PostServiceImpl implements PostService {
     public List<PostResponse> searchPosts(String searchTerm) {
         List<Post> posts = postRepository.searchPosts(searchTerm);
         return posts.stream()
-                .map(postMapper::mapToDto)
+                .map(post -> {
+                    PostResponse response = postMapper.mapToDto(post);
+                    // Add vote status if user is authenticated
+                    if (authService.isLoggedIn()) {
+                        User currentUser = authService.getCurrentUser();
+                        response.setUpVote(isPostUpVoted(post, currentUser));
+                        response.setDownVote(isPostDownVoted(post, currentUser));
+                    }
+                    return response;
+                })
                 .collect(Collectors.toList());
     }
     

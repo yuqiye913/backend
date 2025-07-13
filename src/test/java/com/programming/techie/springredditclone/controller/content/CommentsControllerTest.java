@@ -53,7 +53,7 @@ class CommentsControllerTest {
                 .postId(1L)
                 .text("Test comment")
                 .userName("testuser")
-                .createdDate(Instant.now())
+                .createdDate(Instant.now().toEpochMilli())
                 .voteCount(0)
                 .replyCount(0)
                 .build();

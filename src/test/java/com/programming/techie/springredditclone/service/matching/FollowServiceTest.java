@@ -317,13 +317,16 @@ class FollowServiceTest {
     @DisplayName("Should get follower count by user ID")
     void shouldGetFollowerCountByUserId() {
         // Given
+        FollowerCountDto expectedDto = new FollowerCountDto(2L, "following", 5L);
         when(userRepository.findById(2L)).thenReturn(Optional.of(following));
         when(followRepository.countFollowersByUser(following)).thenReturn(5L);
+        when(followMapper.mapToFollowerCountDto(following, 5L)).thenReturn(expectedDto);
 
         // When
         FollowerCountDto result = followService.getFollowerCountByUserId(2L);
 
         // Then
+        assertThat(result).isEqualTo(expectedDto);
         assertThat(result.getUserId()).isEqualTo(2L);
         assertThat(result.getUsername()).isEqualTo("following");
         assertThat(result.getFollowerCount()).isEqualTo(5L);
@@ -344,8 +347,10 @@ class FollowServiceTest {
     @DisplayName("Should return zero count when user has no followers")
     void shouldReturnZeroCountWhenUserHasNoFollowers() {
         // Given
+        FollowerCountDto expectedDto = new FollowerCountDto(2L, "following", 0L);
         when(userRepository.findById(2L)).thenReturn(Optional.of(following));
         when(followRepository.countFollowersByUser(following)).thenReturn(0L);
+        when(followMapper.mapToFollowerCountDto(following, 0L)).thenReturn(expectedDto);
 
         // When
         FollowerCountDto result = followService.getFollowerCountByUserId(2L);
@@ -358,8 +363,10 @@ class FollowServiceTest {
     @DisplayName("Should return large follower count")
     void shouldReturnLargeFollowerCount() {
         // Given
+        FollowerCountDto expectedDto = new FollowerCountDto(2L, "following", 1000L);
         when(userRepository.findById(2L)).thenReturn(Optional.of(following));
         when(followRepository.countFollowersByUser(following)).thenReturn(1000L);
+        when(followMapper.mapToFollowerCountDto(following, 1000L)).thenReturn(expectedDto);
 
         // When
         FollowerCountDto result = followService.getFollowerCountByUserId(2L);
@@ -373,13 +380,16 @@ class FollowServiceTest {
     @DisplayName("Should get following count by user ID")
     void shouldGetFollowingCountByUserId() {
         // Given
+        FollowingCountDto expectedDto = new FollowingCountDto(2L, "following", 5L);
         when(userRepository.findById(2L)).thenReturn(Optional.of(following));
         when(followRepository.countFollowingByUser(following)).thenReturn(5L);
+        when(followMapper.mapToFollowingCountDto(following, 5L)).thenReturn(expectedDto);
 
         // When
         FollowingCountDto result = followService.getFollowingCountByUserId(2L);
 
         // Then
+        assertThat(result).isEqualTo(expectedDto);
         assertThat(result.getUserId()).isEqualTo(2L);
         assertThat(result.getUsername()).isEqualTo("following");
         assertThat(result.getFollowingCount()).isEqualTo(5L);
@@ -400,8 +410,10 @@ class FollowServiceTest {
     @DisplayName("Should return zero count when user is not following anyone")
     void shouldReturnZeroCountWhenUserIsNotFollowingAnyone() {
         // Given
+        FollowingCountDto expectedDto = new FollowingCountDto(2L, "following", 0L);
         when(userRepository.findById(2L)).thenReturn(Optional.of(following));
         when(followRepository.countFollowingByUser(following)).thenReturn(0L);
+        when(followMapper.mapToFollowingCountDto(following, 0L)).thenReturn(expectedDto);
 
         // When
         FollowingCountDto result = followService.getFollowingCountByUserId(2L);
@@ -414,8 +426,10 @@ class FollowServiceTest {
     @DisplayName("Should return large following count")
     void shouldReturnLargeFollowingCount() {
         // Given
+        FollowingCountDto expectedDto = new FollowingCountDto(2L, "following", 1000L);
         when(userRepository.findById(2L)).thenReturn(Optional.of(following));
         when(followRepository.countFollowingByUser(following)).thenReturn(1000L);
+        when(followMapper.mapToFollowingCountDto(following, 1000L)).thenReturn(expectedDto);
 
         // When
         FollowingCountDto result = followService.getFollowingCountByUserId(2L);
@@ -494,5 +508,191 @@ class FollowServiceTest {
         assertThat(result).hasSize(2);
         assertThat(result.get(0).getUserId()).isEqualTo(1L);
         assertThat(result.get(1).getUserId()).isEqualTo(3L);
+    }
+
+    // ========== IS FOLLOWING USER TESTS ==========
+    @Test
+    @DisplayName("Should return true when user is following another user")
+    void shouldReturnTrueWhenUserIsFollowing() {
+        // Given
+        when(authService.getCurrentUser()).thenReturn(follower);
+        when(userRepository.findById(2L)).thenReturn(Optional.of(following));
+        when(followRepository.existsByFollowerAndFollowing(follower, following)).thenReturn(true);
+
+        // When
+        boolean result = followService.isFollowingUser(2L);
+
+        // Then
+        assertThat(result).isTrue();
+        verify(authService).getCurrentUser();
+        verify(userRepository).findById(2L);
+        verify(followRepository).existsByFollowerAndFollowing(follower, following);
+    }
+
+    @Test
+    @DisplayName("Should return false when user is not following another user")
+    void shouldReturnFalseWhenUserIsNotFollowing() {
+        // Given
+        when(authService.getCurrentUser()).thenReturn(follower);
+        when(userRepository.findById(2L)).thenReturn(Optional.of(following));
+        when(followRepository.existsByFollowerAndFollowing(follower, following)).thenReturn(false);
+
+        // When
+        boolean result = followService.isFollowingUser(2L);
+
+        // Then
+        assertThat(result).isFalse();
+        verify(authService).getCurrentUser();
+        verify(userRepository).findById(2L);
+        verify(followRepository).existsByFollowerAndFollowing(follower, following);
+    }
+
+    @Test
+    @DisplayName("Should throw exception when user to check not found")
+    void shouldThrowExceptionWhenUserToCheckNotFound() {
+        // Given
+        when(authService.getCurrentUser()).thenReturn(follower);
+        when(userRepository.findById(999L)).thenReturn(Optional.empty());
+
+        // When & Then
+        assertThatThrownBy(() -> followService.isFollowingUser(999L))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessage("User not found");
+
+        verify(authService).getCurrentUser();
+        verify(userRepository).findById(999L);
+        verify(followRepository, never()).existsByFollowerAndFollowing(any(), any());
+    }
+
+    @Test
+    @DisplayName("Should handle case when checking follow status for non-existent user")
+    void shouldHandleNonExistentUserForFollowCheck() {
+        // Given
+        when(authService.getCurrentUser()).thenReturn(follower);
+        when(userRepository.findById(999L)).thenReturn(Optional.empty());
+
+        // When & Then
+        assertThatThrownBy(() -> followService.isFollowingUser(999L))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessage("User not found");
+
+        verify(authService).getCurrentUser();
+        verify(userRepository).findById(999L);
+    }
+
+    @Test
+    @DisplayName("Should return false when checking follow status for self")
+    void shouldReturnFalseWhenCheckingFollowStatusForSelf() {
+        // Given
+        when(authService.getCurrentUser()).thenReturn(follower);
+        when(userRepository.findById(1L)).thenReturn(Optional.of(follower));
+        when(followRepository.existsByFollowerAndFollowing(follower, follower)).thenReturn(false);
+
+        // When
+        boolean result = followService.isFollowingUser(1L);
+
+        // Then
+        assertThat(result).isFalse();
+        verify(authService).getCurrentUser();
+        verify(userRepository).findById(1L);
+        verify(followRepository).existsByFollowerAndFollowing(follower, follower);
+    }
+
+    @Test
+    @DisplayName("Should handle multiple follow status checks correctly")
+    void shouldHandleMultipleFollowStatusChecks() {
+        // Given
+        User user3 = new User();
+        user3.setUserId(3L);
+        user3.setUsername("user3");
+        user3.setEmail("user3@example.com");
+
+        when(authService.getCurrentUser()).thenReturn(follower);
+        when(userRepository.findById(2L)).thenReturn(Optional.of(following));
+        when(userRepository.findById(3L)).thenReturn(Optional.of(user3));
+        when(followRepository.existsByFollowerAndFollowing(follower, following)).thenReturn(true);
+        when(followRepository.existsByFollowerAndFollowing(follower, user3)).thenReturn(false);
+
+        // When
+        boolean isFollowingUser2 = followService.isFollowingUser(2L);
+        boolean isFollowingUser3 = followService.isFollowingUser(3L);
+
+        // Then
+        assertThat(isFollowingUser2).isTrue();
+        assertThat(isFollowingUser3).isFalse();
+        verify(authService, times(2)).getCurrentUser();
+        verify(userRepository).findById(2L);
+        verify(userRepository).findById(3L);
+        verify(followRepository).existsByFollowerAndFollowing(follower, following);
+        verify(followRepository).existsByFollowerAndFollowing(follower, user3);
+    }
+
+    @Test
+    @DisplayName("Should handle edge case with null user ID")
+    void shouldHandleNullUserId() {
+        // Given
+        when(authService.getCurrentUser()).thenReturn(follower);
+        when(userRepository.findById(null)).thenReturn(Optional.empty());
+
+        // When & Then
+        assertThatThrownBy(() -> followService.isFollowingUser(null))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessage("User not found");
+
+        verify(authService).getCurrentUser();
+        verify(userRepository).findById(null);
+    }
+
+    @Test
+    @DisplayName("Should handle repository exception gracefully")
+    void shouldHandleRepositoryException() {
+        // Given
+        when(authService.getCurrentUser()).thenReturn(follower);
+        when(userRepository.findById(2L)).thenReturn(Optional.of(following));
+        when(followRepository.existsByFollowerAndFollowing(follower, following))
+                .thenThrow(new RuntimeException("Database error"));
+
+        // When & Then
+        assertThatThrownBy(() -> followService.isFollowingUser(2L))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessage("Database error");
+
+        verify(authService).getCurrentUser();
+        verify(userRepository).findById(2L);
+        verify(followRepository).existsByFollowerAndFollowing(follower, following);
+    }
+
+    @Test
+    @DisplayName("Should verify correct parameters passed to repository")
+    void shouldVerifyCorrectParametersPassedToRepository() {
+        // Given
+        when(authService.getCurrentUser()).thenReturn(follower);
+        when(userRepository.findById(2L)).thenReturn(Optional.of(following));
+        when(followRepository.existsByFollowerAndFollowing(follower, following)).thenReturn(true);
+
+        // When
+        followService.isFollowingUser(2L);
+
+        // Then
+        verify(followRepository).existsByFollowerAndFollowing(follower, following);
+        verifyNoMoreInteractions(followRepository);
+    }
+
+    @Test
+    @DisplayName("Should handle case when user exists but follow relationship doesn't")
+    void shouldHandleUserExistsButNoFollowRelationship() {
+        // Given
+        when(authService.getCurrentUser()).thenReturn(follower);
+        when(userRepository.findById(2L)).thenReturn(Optional.of(following));
+        when(followRepository.existsByFollowerAndFollowing(follower, following)).thenReturn(false);
+
+        // When
+        boolean result = followService.isFollowingUser(2L);
+
+        // Then
+        assertThat(result).isFalse();
+        verify(authService).getCurrentUser();
+        verify(userRepository).findById(2L);
+        verify(followRepository).existsByFollowerAndFollowing(follower, following);
     }
 } 
