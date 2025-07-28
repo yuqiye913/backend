@@ -680,11 +680,6 @@ ENTRYPOINT ["java", "-jar", "/app.jar"]
    git checkout -b feature/new-feature
    ```
 
-2. **Make Changes**
-   - Follow coding standards
-   - Add unit tests for new functionality
-   - Update documentation
-
 3. **Test Changes**
    ```bash
    ./mvnw test
@@ -698,52 +693,7 @@ ENTRYPOINT ["java", "-jar", "/app.jar"]
    git push origin feature/new-feature
    ```
 
-### Code Standards
-
-- Use meaningful variable and method names
-- Add JavaDoc comments for public methods
-- Follow Spring Boot conventions
-- Use Lombok annotations to reduce boilerplate
-- Implement proper exception handling
-- Add validation annotations to DTOs
-
-### Debugging
-
-1. **Enable Debug Logging**
-   ```properties
-   logging.level.com.programming.techie=DEBUG
-   ```
-
-2. **Use IDE Debugger**
-   - Set breakpoints in IDE
-   - Run application in debug mode
-
-3. **Database Debugging**
-   ```properties
-   spring.jpa.show-sql=true
-   spring.jpa.properties.hibernate.format_sql=true
-   ```
-
 ---
-
-## Support and Maintenance
-
-### Common Issues
-
-1. **Database Connection Issues**
-   - Verify PostgreSQL is running
-   - Check database credentials
-   - Ensure database exists
-
-2. **JWT Token Issues**
-   - Verify key files exist in resources
-   - Check key permissions
-   - Regenerate keys if corrupted
-
-3. **Email Issues**
-   - Verify SMTP settings
-   - Check email credentials
-   - Test with different email provider
 
 ### Performance Optimization
 
