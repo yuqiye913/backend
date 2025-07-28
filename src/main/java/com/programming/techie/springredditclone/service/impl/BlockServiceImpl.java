@@ -109,7 +109,8 @@ public class BlockServiceImpl implements BlockService {
         User currentUser = authService.getCurrentUser();
         Pageable pageable = PageRequest.of(page, size);
         
-        Page<Block> blockPage = blockRepository.findByBlocker(currentUser, pageable);
+        // Only get active blocks from the database
+        Page<Block> blockPage = blockRepository.findByBlockerAndIsActive(currentUser, true, pageable);
         List<BlockResponseDto> blockedUsers = blockPage.getContent().stream()
                 .map(block -> mapToBlockResponseDto(block, currentUser, block.getBlocked()))
                 .collect(Collectors.toList());
@@ -161,7 +162,8 @@ public class BlockServiceImpl implements BlockService {
         User targetUser = userRepository.findById(userId)
                 .orElseThrow(() -> new SpringRedditException("User not found with ID: " + userId));
 
-        return blockRepository.existsByBlockerAndBlocked(currentUser, targetUser);
+        // Check if there's an active block
+        return blockRepository.existsByBlockerAndBlockedAndIsActive(currentUser, targetUser, true);
     }
 
     @Override
@@ -251,8 +253,7 @@ public class BlockServiceImpl implements BlockService {
     @Transactional(readOnly = true)
     public List<BlockResponseDto> getActiveBlocks() {
         User currentUser = authService.getCurrentUser();
-        return blockRepository.findByBlocker(currentUser).stream()
-                .filter(Block::isActive)
+        return blockRepository.findByBlockerAndIsActive(currentUser, true).stream()
                 .map(block -> mapToBlockResponseDto(block, currentUser, block.getBlocked()))
                 .collect(Collectors.toList());
     }
@@ -267,7 +268,7 @@ public class BlockServiceImpl implements BlockService {
         dto.setBlockerUsername(blocker.getUsername());
         dto.setBlockedUserUsername(blocked.getUsername());
         dto.setReason(block.getReason());
-        dto.setBlockedAt(block.getBlockedAt());
+        dto.setBlockedAt(block.getBlockedAt() != null ? block.getBlockedAt().toEpochMilli() : null);
         dto.setActive(block.isActive());
         
 

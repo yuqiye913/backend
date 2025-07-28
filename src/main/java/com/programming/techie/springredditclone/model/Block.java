@@ -17,6 +17,9 @@ import java.time.Instant;
 public class Block {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+
+    // block_id
+    
     private Long id;
     
     @ManyToOne(fetch = FetchType.LAZY)

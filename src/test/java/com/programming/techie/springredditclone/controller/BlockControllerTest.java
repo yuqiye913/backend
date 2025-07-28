@@ -58,7 +58,7 @@ class BlockControllerTest {
         response.setBlockedUserId(2L);
         response.setReason("Test reason");
         response.setActive(true);
-        response.setBlockedAt(Instant.now());
+        response.setBlockedAt(Instant.now().toEpochMilli());
 
         when(blockService.blockUser(any(BlockRequestDto.class))).thenReturn(response);
 
@@ -86,7 +86,7 @@ class BlockControllerTest {
         response.setBlockerId(1L);
         response.setBlockedUserId(2L);
         response.setActive(false);
-        response.setBlockedAt(Instant.now());
+        response.setBlockedAt(Instant.now().toEpochMilli());
 
         when(blockService.unblockUser(any(UnblockRequestDto.class))).thenReturn(response);
 
@@ -110,7 +110,7 @@ class BlockControllerTest {
         dto.setBlockedUserId(2L);
         dto.setReason("Test reason");
         dto.setActive(true);
-        dto.setBlockedAt(Instant.now());
+        dto.setBlockedAt(Instant.now().toEpochMilli());
         response.setBlockedUsers(Arrays.asList(dto));
         response.setTotalCount(1L);
         response.setCurrentPage(0L);
@@ -138,7 +138,7 @@ class BlockControllerTest {
         dto2.setBlockedUserId(1L);
         dto2.setReason("Test reason");
         dto2.setActive(true);
-        dto2.setBlockedAt(Instant.now());
+        dto2.setBlockedAt(Instant.now().toEpochMilli());
         response.setBlockedUsers(Arrays.asList(dto2));
         response.setTotalCount(1L);
         response.setCurrentPage(0L);
@@ -165,7 +165,7 @@ class BlockControllerTest {
         response.setBlockedUserId(2L);
         response.setReason("Test reason");
         response.setActive(true);
-        response.setBlockedAt(Instant.now());
+        response.setBlockedAt(Instant.now().toEpochMilli());
 
         when(blockService.getBlockById(1L)).thenReturn(response);
 

@@ -1,6 +1,7 @@
 package com.programming.techie.springredditclone.service;
 
 import com.programming.techie.springredditclone.dto.MatchDto;
+import com.programming.techie.springredditclone.dto.MatchCountDto;
 import com.programming.techie.springredditclone.model.User;
 
 import java.util.List;
@@ -66,6 +67,13 @@ public interface MatchingService {
      * @return Match statistics
      */
     MatchStatistics getMatchStatistics();
+    
+    /**
+     * Get detailed match count based on criteria
+     * @param matchCountDto Match count criteria
+     * @return Detailed match count information
+     */
+    MatchCountDto getMatchCount(MatchCountDto matchCountDto);
     
     /**
      * Rate a match after interaction

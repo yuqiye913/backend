@@ -13,6 +13,7 @@ import com.programming.techie.springredditclone.repository.FollowRepository;
 import com.programming.techie.springredditclone.repository.UserRepository;
 import com.programming.techie.springredditclone.service.AuthService;
 import com.programming.techie.springredditclone.service.BlockService;
+import com.programming.techie.springredditclone.service.BlockValidationService;
 import com.programming.techie.springredditclone.service.FollowService;
 import com.programming.techie.springredditclone.mapper.FollowMapper;
 import lombok.RequiredArgsConstructor;
@@ -30,6 +31,7 @@ public class FollowServiceImpl implements FollowService {
     private final UserRepository userRepository;
     private final AuthService authService;
     private final BlockService blockService;
+    private final BlockValidationService blockValidationService;
     private final FollowMapper followMapper;
     private final ApplicationEventPublisher eventPublisher;
 
@@ -48,10 +50,8 @@ public class FollowServiceImpl implements FollowService {
             throw new RuntimeException("You cannot follow yourself");
         }
 
-        // Check if users are blocked
-        if (blockService.hasBlockedUser(following.getUserId()) || blockService.isBlockedByUser(following.getUserId())) {
-            throw new RuntimeException("Cannot follow user due to block restrictions");
-        }
+        // Use BlockValidationService for cleaner validation
+        blockValidationService.validateCanInteract(following);
 
         Follow follow = new Follow();
         follow.setFollower(follower);
@@ -92,10 +92,8 @@ public class FollowServiceImpl implements FollowService {
         
         User currentUser = authService.getCurrentUser();
         
-        // Check if current user is blocked by target user or has blocked target user
-        if (blockService.isBlockedByUser(userId) || blockService.hasBlockedUser(userId)) {
-            throw new RuntimeException("Cannot view followers due to block restrictions");
-        }
+        // Use BlockValidationService for cleaner validation
+        blockValidationService.validateCanViewContent(userId);
         
         List<Follow> followers = followRepository.findActiveFollowersByUser(user);
         
@@ -111,10 +109,8 @@ public class FollowServiceImpl implements FollowService {
         
         User currentUser = authService.getCurrentUser();
         
-        // Check if current user is blocked by target user or has blocked target user
-        if (blockService.isBlockedByUser(userId) || blockService.hasBlockedUser(userId)) {
-            throw new RuntimeException("Cannot view following due to block restrictions");
-        }
+        // Use BlockValidationService for cleaner validation
+        blockValidationService.validateCanViewContent(userId);
         
         List<Follow> following = followRepository.findActiveFollowingByUser(user);
         

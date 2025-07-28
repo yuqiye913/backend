@@ -14,6 +14,7 @@ import com.programming.techie.springredditclone.repository.PostRepository;
 import com.programming.techie.springredditclone.repository.VoteRepository;
 import com.programming.techie.springredditclone.service.AuthService;
 import com.programming.techie.springredditclone.service.BlockService;
+import com.programming.techie.springredditclone.service.BlockValidationService;
 import com.programming.techie.springredditclone.service.VoteService;
 import lombok.AllArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
@@ -33,6 +34,7 @@ public class VoteServiceImpl implements VoteService {
     private final CommentRepository commentRepository;
     private final AuthService authService;
     private final BlockService blockService;
+    private final BlockValidationService blockValidationService;
     private final ApplicationEventPublisher eventPublisher;
 
     @Override
@@ -44,10 +46,8 @@ public class VoteServiceImpl implements VoteService {
         User currentUser = authService.getCurrentUser();
         User postOwner = post.getUser();
         
-        // Check if current user is blocked by post owner or has blocked post owner
-        if (blockService.isBlockedByUser(postOwner.getUserId()) || blockService.hasBlockedUser(postOwner.getUserId())) {
-            throw new SpringRedditException("Cannot like this post due to block restrictions");
-        }
+        // Use BlockValidationService for cleaner validation
+        blockValidationService.validateCanInteract(postOwner);
         
         Optional<Vote> existingVote = voteRepository.findByPostAndUser(post, currentUser);
         
@@ -117,10 +117,8 @@ public class VoteServiceImpl implements VoteService {
         User currentUser = authService.getCurrentUser();
         User commentOwner = comment.getUser();
         
-        // Check if current user is blocked by comment owner or has blocked comment owner
-        if (blockService.isBlockedByUser(commentOwner.getUserId()) || blockService.hasBlockedUser(commentOwner.getUserId())) {
-            throw new SpringRedditException("Cannot like this comment due to block restrictions");
-        }
+        // Use BlockValidationService for cleaner validation
+        blockValidationService.validateCanInteract(commentOwner);
         
         Optional<Vote> existingVote = voteRepository.findByCommentAndUser(comment, currentUser);
         

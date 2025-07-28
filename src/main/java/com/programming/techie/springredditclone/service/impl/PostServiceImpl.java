@@ -13,6 +13,7 @@ import com.programming.techie.springredditclone.repository.SubredditRepository;
 import com.programming.techie.springredditclone.repository.UserRepository;
 import com.programming.techie.springredditclone.service.AuthService;
 import com.programming.techie.springredditclone.service.BlockService;
+import com.programming.techie.springredditclone.service.BlockValidationService;
 import com.programming.techie.springredditclone.service.PostService;
 import com.programming.techie.springredditclone.util.CursorUtil;
 import com.programming.techie.springredditclone.repository.VoteRepository;
@@ -47,6 +48,7 @@ public class PostServiceImpl implements PostService {
     private final UserRepository userRepository;
     private final AuthService authService;
     private final BlockService blockService;
+    private final BlockValidationService blockValidationService;
     private final PostMapper postMapper;
     private final CursorUtil cursorUtil;
     private final VoteRepository voteRepository;
@@ -174,6 +176,10 @@ public class PostServiceImpl implements PostService {
         }
         
         List<PostResponse> postResponses = posts.stream()
+                .filter(post -> {
+                    // Filter out posts from blocked users using the validation service
+                    return !blockValidationService.hasBlockRelationship(post.getUser().getUserId());
+                })
                 .map(post -> {
                     PostResponse response = postMapper.mapToDto(post);
                     // Add vote status if user is authenticated
@@ -218,6 +224,10 @@ public class PostServiceImpl implements PostService {
         }
         
         List<PostResponse> postResponses = posts.stream()
+                .filter(post -> {
+                    // Filter out posts from blocked users using the validation service
+                    return !blockValidationService.hasBlockRelationship(post.getUser().getUserId());
+                })
                 .map(post -> {
                     PostResponse response = postMapper.mapToDto(post);
                     // Add vote status if user is authenticated
@@ -245,16 +255,8 @@ public class PostServiceImpl implements PostService {
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new RuntimeException("User not found with username - " + username));
 
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication != null
-                && !(authentication instanceof AnonymousAuthenticationToken)
-                && authentication.isAuthenticated()
-                && authentication.getPrincipal() instanceof Jwt) {
-            User currentUser = authService.getCurrentUser();
-            if (blockService.isBlockedByUser(user.getUserId()) || blockService.hasBlockedUser(user.getUserId())) {
-                throw new SpringRedditException("Cannot view posts due to block restrictions");
-            }
-        }
+        // Use BlockValidationService for cleaner block validation
+        blockValidationService.validateCanViewContent(user);
 
         Instant createdDate = Instant.now();
         Long postId = Long.MAX_VALUE;
@@ -300,16 +302,8 @@ public class PostServiceImpl implements PostService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found with ID - " + userId));
 
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication != null
-                && !(authentication instanceof AnonymousAuthenticationToken)
-                && authentication.isAuthenticated()
-                && authentication.getPrincipal() instanceof Jwt) {
-            User currentUser = authService.getCurrentUser();
-            if (blockService.isBlockedByUser(user.getUserId()) || blockService.hasBlockedUser(user.getUserId())) {
-                throw new SpringRedditException("Cannot view posts due to block restrictions");
-            }
-        }
+        // Use BlockValidationService for cleaner block validation
+        blockValidationService.validateCanViewContent(user);
 
         Instant createdDate = Instant.now();
         Long postId = Long.MAX_VALUE;
@@ -443,6 +437,10 @@ public class PostServiceImpl implements PostService {
     public List<PostResponse> searchPostsBySubreddit(String subredditName) {
         List<Post> posts = postRepository.findBySubredditName(subredditName);
         return posts.stream()
+                .filter(post -> {
+                    // Filter out posts from blocked users using the validation service
+                    return !blockValidationService.hasBlockRelationship(post.getUser().getUserId());
+                })
                 .map(postMapper::mapToDto)
                 .collect(Collectors.toList());
     }
@@ -452,6 +450,10 @@ public class PostServiceImpl implements PostService {
     public List<PostResponse> searchPosts(String searchTerm) {
         List<Post> posts = postRepository.searchPosts(searchTerm);
         return posts.stream()
+                .filter(post -> {
+                    // Filter out posts from blocked users using the validation service
+                    return !blockValidationService.hasBlockRelationship(post.getUser().getUserId());
+                })
                 .map(post -> {
                     PostResponse response = postMapper.mapToDto(post);
                     // Add vote status if user is authenticated
@@ -484,6 +486,10 @@ public class PostServiceImpl implements PostService {
         List<Post> promotedPosts = postRepository.findTopPostsByVoteCount(PageRequest.of(0, limit));
         
         return promotedPosts.stream()
+                .filter(post -> {
+                    // Filter out promoted posts from blocked users using the validation service
+                    return !blockValidationService.hasBlockRelationship(post.getUser().getUserId());
+                })
                 .map(post -> {
                     PostResponse response = postMapper.mapToDto(post);
                     // Add vote status if user is authenticated
@@ -534,6 +540,10 @@ public class PostServiceImpl implements PostService {
         }
         
         List<PostResponse> postResponses = posts.stream()
+                .filter(post -> {
+                    // Filter out promoted posts from blocked users using the validation service
+                    return !blockValidationService.hasBlockRelationship(post.getUser().getUserId());
+                })
                 .map(post -> {
                     PostResponse response = postMapper.mapToDto(post);
                     // Add vote status if user is authenticated

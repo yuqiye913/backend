@@ -24,7 +24,7 @@ public class BlockResponseDto {
     
     // Block details
     private String reason;
-    private Instant blockedAt;
+    private Long blockedAt; // Changed from Instant to Long (milliseconds since epoch)
     private boolean isActive;
     
     // Block statistics
@@ -34,7 +34,7 @@ public class BlockResponseDto {
     
     // Block history
     private Long previousBlockCount; // Number of times this user was blocked before
-    private Instant lastBlockedAt; // When this user was last blocked
+    private Long lastBlockedAt; // When this user was last blocked (milliseconds since epoch)
     private String blockHistory; // Brief history of previous blocks
     
     // Block impact

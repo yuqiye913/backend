@@ -4,6 +4,7 @@ import com.programming.techie.springredditclone.dto.MatchDto;
 import com.programming.techie.springredditclone.dto.MatchRequestDto;
 import com.programming.techie.springredditclone.dto.MatchResponseDto;
 import com.programming.techie.springredditclone.dto.MatchStatusDto;
+import com.programming.techie.springredditclone.dto.MatchCountDto;
 import com.programming.techie.springredditclone.exceptions.SpringRedditException;
 import com.programming.techie.springredditclone.mapper.MatchMapper;
 import com.programming.techie.springredditclone.model.Match;
@@ -108,10 +109,15 @@ public class MatchingServiceImpl implements MatchingService {
             match.setMutualMatch(true);
             reverseMatch.get().setMutualMatch(true);
             matchRepository.save(reverseMatch.get());
+            
+            // Enable video calling for mutual matches
+            match.setPreferredCommunicationMethod("video");
+            reverseMatch.get().setPreferredCommunicationMethod("video");
+            matchRepository.save(reverseMatch.get());
         }
 
         Match savedMatch = matchRepository.save(match);
-        log.info("User {} accepted match with user {}", currentUser.getUsername(), match.getUser().getUsername());
+        log.info("User {} accepted match with user {} - video calling enabled", currentUser.getUsername(), match.getUser().getUsername());
         
         return matchMapper.mapToDto(savedMatch);
     }
@@ -197,6 +203,67 @@ public class MatchingServiceImpl implements MatchingService {
         double averageRating = 0.0; // TODO: Implement rating calculation
         
         return new MatchStatistics(totalMatches, mutualMatches, pendingMatches, acceptedMatches, declinedMatches, averageRating);
+    }
+    
+    @Override
+    @Transactional(readOnly = true)
+    public MatchCountDto getMatchCount(MatchCountDto matchCountDto) {
+        User currentUser = getCurrentUser();
+        
+        // Verify the user is requesting their own match count
+        if (!currentUser.getUserId().equals(matchCountDto.getUserId())) {
+            throw new SpringRedditException("You can only request match counts for yourself");
+        }
+        
+        // Get all matches for the user
+        List<Match> userMatches = matchRepository.findByUser(currentUser);
+        
+        // Apply filters based on the DTO criteria
+        List<Match> filteredMatches = userMatches.stream()
+                .filter(match -> applyMatchStatusFilter(match, matchCountDto))
+                .filter(match -> applyMatchTypeFilter(match, matchCountDto))
+                .filter(match -> applyTimeFilters(match, matchCountDto))
+                .filter(match -> applyQualityFilters(match, matchCountDto))
+                .filter(match -> applyCharacteristicFilters(match, matchCountDto))
+                .filter(match -> applyCommunicationFilters(match, matchCountDto))
+                .collect(Collectors.toList());
+        
+        // Calculate various counts
+        MatchCountDto result = new MatchCountDto();
+        result.setUserId(currentUser.getUserId());
+        result.setCountGeneratedAt(Instant.now());
+        result.setIsRealTime(true);
+        
+        // Basic counts
+        result.setTotalMatches((long) filteredMatches.size());
+        result.setPendingMatches(countByStatus(filteredMatches, "pending"));
+        result.setAcceptedMatches(countByStatus(filteredMatches, "accepted"));
+        result.setDeclinedMatches(countByStatus(filteredMatches, "declined"));
+        result.setMutualMatches(countByCharacteristic(filteredMatches, Match::isMutualMatch, true));
+        result.setSuperLikeMatches(countByCharacteristic(filteredMatches, Match::isSuperLike, true));
+        result.setVerifiedMatches(countByCharacteristic(filteredMatches, Match::isVerifiedMatch, true));
+        result.setUnreadMatches(countByCharacteristic(filteredMatches, Match::isRead, false));
+        result.setExpiredMatches(countByCharacteristic(filteredMatches, Match::isExpired, true));
+        
+        // Communication counts
+        result.setMatchesWithMessages(countByCharacteristic(filteredMatches, Match::isHasSentMessage, true) + 
+                                   countByCharacteristic(filteredMatches, Match::isHasReceivedMessage, true));
+        result.setMatchesWithCalls(countByCharacteristic(filteredMatches, Match::isHasCalled, true) + 
+                                 countByCharacteristic(filteredMatches, Match::isHasReceivedCall, true));
+        
+        // Quality distribution
+        result.setHighQualityMatches(countByScoreRange(filteredMatches, 80.0, 100.0));
+        result.setMediumQualityMatches(countByScoreRange(filteredMatches, 50.0, 79.9));
+        result.setLowQualityMatches(countByScoreRange(filteredMatches, 0.0, 49.9));
+        
+        // Time-based counts
+        Instant sevenDaysAgo = Instant.now().minusSeconds(7 * 24 * 60 * 60);
+        Instant thirtyDaysAgo = Instant.now().minusSeconds(30 * 24 * 60 * 60);
+        
+        result.setRecentMatches(countByTimeRange(filteredMatches, sevenDaysAgo, Instant.now()));
+        result.setRecentlyActiveMatches(countByInteractionTimeRange(filteredMatches, thirtyDaysAgo, Instant.now()));
+        
+        return result;
     }
 
     @Override
@@ -286,5 +353,119 @@ public class MatchingServiceImpl implements MatchingService {
         dto.setMatchedUserUsername(potentialUser.getUsername());
         dto.setMatchStatus("potential");
         return dto;
+    }
+    
+    // Helper methods for match counting
+    private boolean applyMatchStatusFilter(Match match, MatchCountDto dto) {
+        if (dto.getMatchStatus() == null || "all".equals(dto.getMatchStatus())) {
+            return true;
+        }
+        return dto.getMatchStatus().equals(match.getMatchStatus());
+    }
+    
+    private boolean applyMatchTypeFilter(Match match, MatchCountDto dto) {
+        if (dto.getMatchType() == null || "all".equals(dto.getMatchType())) {
+            return true;
+        }
+        return dto.getMatchType().equals(match.getMatchType());
+    }
+    
+    private boolean applyTimeFilters(Match match, MatchCountDto dto) {
+        if (dto.getCreatedAfter() != null && match.getMatchedAt().isBefore(dto.getCreatedAfter())) {
+            return false;
+        }
+        if (dto.getCreatedBefore() != null && match.getMatchedAt().isAfter(dto.getCreatedBefore())) {
+            return false;
+        }
+        if (dto.getLastInteractionAfter() != null && match.getLastInteractionAt() != null && 
+            match.getLastInteractionAt().isBefore(dto.getLastInteractionAfter())) {
+            return false;
+        }
+        if (dto.getLastInteractionBefore() != null && match.getLastInteractionAt() != null && 
+            match.getLastInteractionAt().isAfter(dto.getLastInteractionBefore())) {
+            return false;
+        }
+        return true;
+    }
+    
+    private boolean applyQualityFilters(Match match, MatchCountDto dto) {
+        if (dto.getMinMatchScore() != null && match.getOverallMatchScore() < dto.getMinMatchScore()) {
+            return false;
+        }
+        if (dto.getMaxMatchScore() != null && match.getOverallMatchScore() > dto.getMaxMatchScore()) {
+            return false;
+        }
+        return true;
+    }
+    
+    private boolean applyCharacteristicFilters(Match match, MatchCountDto dto) {
+        if (dto.getIsMutualMatch() != null && match.isMutualMatch() != dto.getIsMutualMatch()) {
+            return false;
+        }
+        if (dto.getIsSuperLike() != null && match.isSuperLike() != dto.getIsSuperLike()) {
+            return false;
+        }
+        if (dto.getIsVerifiedMatch() != null && match.isVerifiedMatch() != dto.getIsVerifiedMatch()) {
+            return false;
+        }
+        if (dto.getIsRead() != null && match.isRead() != dto.getIsRead()) {
+            return false;
+        }
+        if (dto.getIsExpired() != null && match.isExpired() != dto.getIsExpired()) {
+            return false;
+        }
+        return true;
+    }
+    
+    private boolean applyCommunicationFilters(Match match, MatchCountDto dto) {
+        if (dto.getPreferredCommunicationMethod() != null && !"all".equals(dto.getPreferredCommunicationMethod()) &&
+            !dto.getPreferredCommunicationMethod().equals(match.getPreferredCommunicationMethod())) {
+            return false;
+        }
+        if (dto.getHasSentMessage() != null && match.isHasSentMessage() != dto.getHasSentMessage()) {
+            return false;
+        }
+        if (dto.getHasReceivedMessage() != null && match.isHasReceivedMessage() != dto.getHasReceivedMessage()) {
+            return false;
+        }
+        if (dto.getHasCalled() != null && match.isHasCalled() != dto.getHasCalled()) {
+            return false;
+        }
+        if (dto.getHasReceivedCall() != null && match.isHasReceivedCall() != dto.getHasReceivedCall()) {
+            return false;
+        }
+        return true;
+    }
+    
+    private long countByStatus(List<Match> matches, String status) {
+        return matches.stream()
+                .filter(match -> status.equals(match.getMatchStatus()))
+                .count();
+    }
+    
+    private long countByCharacteristic(List<Match> matches, java.util.function.Function<Match, Boolean> characteristic, boolean expectedValue) {
+        return matches.stream()
+                .filter(match -> characteristic.apply(match) == expectedValue)
+                .count();
+    }
+    
+    private long countByScoreRange(List<Match> matches, double minScore, double maxScore) {
+        return matches.stream()
+                .filter(match -> match.getOverallMatchScore() >= minScore && match.getOverallMatchScore() <= maxScore)
+                .count();
+    }
+    
+    private long countByTimeRange(List<Match> matches, Instant startTime, Instant endTime) {
+        return matches.stream()
+                .filter(match -> match.getMatchedAt().isAfter(startTime) && match.getMatchedAt().isBefore(endTime))
+                .count();
+    }
+    
+    private long countByInteractionTimeRange(List<Match> matches, Instant startTime, Instant endTime) {
+        return matches.stream()
+                .filter(match -> match.getLastInteractionAt() != null && 
+                               match.getLastInteractionAt().isAfter(startTime) && 
+                               match.getLastInteractionAt().isBefore(endTime))
+                .count();
     }
 } 

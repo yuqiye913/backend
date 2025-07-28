@@ -16,11 +16,18 @@ import java.util.Optional;
 public interface BlockRepository extends JpaRepository<Block, Long> {
     List<Block> findByBlocker(User blocker);
     Page<Block> findByBlocker(User blocker, Pageable pageable);
+    List<Block> findByBlockerAndIsActive(User blocker, boolean isActive);
+    Page<Block> findByBlockerAndIsActive(User blocker, boolean isActive, Pageable pageable);
     List<Block> findByBlocked(User blocked);
     Page<Block> findByBlocked(User blocked, Pageable pageable);
     Optional<Block> findByBlockerAndBlocked(User blocker, User blocked);
     boolean existsByBlockerAndBlocked(User blocker, User blocked);
+    boolean existsByBlockerAndBlockedAndIsActive(User blocker, User blocked, boolean isActive);
     
     @Query("SELECT b FROM Block b WHERE b.blocker = :user OR b.blocked = :user")
     List<Block> findAllBlocksInvolvingUser(@Param("user") User user);
+    
+    // Get blocked user IDs for filtering in other repositories
+    @Query("SELECT b.blocked.userId FROM Block b WHERE b.blocker = :user AND b.isActive = true")
+    List<Long> findBlockedUserIdsByBlocker(@Param("user") User user);
 } 

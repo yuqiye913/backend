@@ -7,6 +7,7 @@ import com.programming.techie.springredditclone.repository.UserIntroRepository;
 import com.programming.techie.springredditclone.repository.UserRepository;
 import com.programming.techie.springredditclone.service.AuthService;
 import com.programming.techie.springredditclone.service.BlockService;
+import com.programming.techie.springredditclone.service.BlockValidationService;
 import com.programming.techie.springredditclone.service.UserService;
 import com.programming.techie.springredditclone.mapper.UserMapper;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -22,15 +23,18 @@ public class UserServiceImpl implements UserService {
     private final UserIntroRepository userIntroRepository;
     private final AuthService authService;
     private final BlockService blockService;
+    private final BlockValidationService blockValidationService;
     private final UserMapper userMapper;
 
     @Autowired
     public UserServiceImpl(UserRepository userRepository, UserIntroRepository userIntroRepository, 
-                          AuthService authService, BlockService blockService, UserMapper userMapper) {
+                          AuthService authService, BlockService blockService, 
+                          BlockValidationService blockValidationService, UserMapper userMapper) {
         this.userRepository = userRepository;
         this.userIntroRepository = userIntroRepository;
         this.authService = authService;
         this.blockService = blockService;
+        this.blockValidationService = blockValidationService;
         this.userMapper = userMapper;
     }
 
@@ -41,10 +45,8 @@ public class UserServiceImpl implements UserService {
         
         User currentUser = authService.getCurrentUser();
         
-        // Check if current user is blocked by target user or has blocked target user
-        if (blockService.isBlockedByUser(userId) || blockService.hasBlockedUser(userId)) {
-            throw new RuntimeException("Cannot view user profile due to block restrictions");
-        }
+        // Use BlockValidationService for cleaner validation
+        blockValidationService.validateCanViewContent(userId);
         
         Optional<UserIntro> userIntroOpt = userIntroRepository.findByUserId(userId);
         

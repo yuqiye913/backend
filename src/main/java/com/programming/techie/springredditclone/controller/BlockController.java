@@ -28,6 +28,12 @@ public class BlockController {
         return ResponseEntity.ok(response);
     }
 
+    @PostMapping("/unblock")
+    public ResponseEntity<BlockResponseDto> unblockUserPost(@RequestBody UnblockRequestDto unblockRequest) {
+        BlockResponseDto response = blockService.unblockUser(unblockRequest);
+        return ResponseEntity.ok(response);
+    }
+
     @GetMapping
     public ResponseEntity<BlockListResponseDto> getBlockedUsers(
             @RequestParam(defaultValue = "0") int page,

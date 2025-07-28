@@ -18,6 +18,7 @@ import com.programming.techie.springredditclone.repository.VoteRepository;
 import com.programming.techie.springredditclone.event.PostCommentedEvent;
 import com.programming.techie.springredditclone.service.AuthService;
 import com.programming.techie.springredditclone.service.BlockService;
+import com.programming.techie.springredditclone.service.BlockValidationService;
 import com.programming.techie.springredditclone.service.CommentService;
 import com.programming.techie.springredditclone.service.NotificationService;
 import com.programming.techie.springredditclone.util.CursorUtil;
@@ -39,6 +40,7 @@ public class CommentServiceImpl implements CommentService {
     private final CommentRepository commentRepository;
     private final NotificationService notificationService;
     private final BlockService blockService;
+    private final BlockValidationService blockValidationService;
     private final CursorUtil cursorUtil;
     private final ApplicationEventPublisher eventPublisher;
     private final VoteRepository voteRepository;
@@ -51,10 +53,8 @@ public class CommentServiceImpl implements CommentService {
         User currentUser = authService.getCurrentUser();
         User postOwner = post.getUser();
         
-        // Check if current user is blocked by post owner or has blocked post owner
-        if (blockService.isBlockedByUser(postOwner.getUserId()) || blockService.hasBlockedUser(postOwner.getUserId())) {
-            throw new SpringRedditException("Cannot comment on this post due to block restrictions");
-        }
+        // Use the new BlockValidationService for cleaner validation
+        blockValidationService.validateCanInteract(postOwner);
         
         Comment comment = commentMapper.map(commentsDto, post, currentUser);
         commentRepository.save(comment);
@@ -75,10 +75,8 @@ public class CommentServiceImpl implements CommentService {
         User currentUser = authService.getCurrentUser();
         User postOwner = post.getUser();
         
-        // Check if current user is blocked by post owner or has blocked post owner
-        if (blockService.isBlockedByUser(postOwner.getUserId()) || blockService.hasBlockedUser(postOwner.getUserId())) {
-            throw new SpringRedditException("Cannot comment on this post due to block restrictions");
-        }
+        // Use the new BlockValidationService for cleaner validation
+        blockValidationService.validateCanInteract(postOwner);
         
         // Check for inappropriate language
         containsSwearWords(createCommentRequest.getText());
@@ -141,9 +139,8 @@ public class CommentServiceImpl implements CommentService {
         return commentRepository.findByPost(post)
                 .stream()
                 .filter(comment -> {
-                    // Filter out comments from blocked users or users who blocked current user
-                    return !blockService.hasBlockedUser(comment.getUser().getUserId()) && 
-                           !blockService.isBlockedByUser(comment.getUser().getUserId());
+                    // Filter out comments from blocked users using the validation service
+                    return !blockValidationService.hasBlockRelationship(comment.getUser().getUserId());
                 })
                 .map(comment -> {
                     CommentsDto dto = commentMapper.mapToDto(comment);
@@ -193,6 +190,10 @@ public class CommentServiceImpl implements CommentService {
         }
         
         List<CommentsDto> commentDtos = comments.stream()
+                .filter(comment -> {
+                    // Filter out comments from blocked users using the validation service
+                    return !blockValidationService.hasBlockRelationship(comment.getUser().getUserId());
+                })
                 .map(comment -> {
                     CommentsDto dto = commentMapper.mapToDto(comment);
                     dto.setUpVote(false);
@@ -245,6 +246,10 @@ public class CommentServiceImpl implements CommentService {
         }
         
         List<CommentsDto> commentDtos = comments.stream()
+                .filter(comment -> {
+                    // Filter out comments from blocked users using the validation service
+                    return !blockValidationService.hasBlockRelationship(comment.getUser().getUserId());
+                })
                 .map(commentMapper::mapToDto)
                 .toList();
         
@@ -280,6 +285,10 @@ public class CommentServiceImpl implements CommentService {
         }
         
         List<CommentsDto> replyDtos = replies.stream()
+                .filter(reply -> {
+                    // Filter out replies from blocked users using the validation service
+                    return !blockValidationService.hasBlockRelationship(reply.getUser().getUserId());
+                })
                 .map(commentMapper::mapToDto)
                 .toList();
         
