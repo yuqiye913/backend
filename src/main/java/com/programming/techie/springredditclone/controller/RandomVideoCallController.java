@@ -206,4 +206,14 @@ public class RandomVideoCallController {
         RandomVideoCallService.MatchingSystemStatus status = randomVideoCallService.getMatchingSystemStatus();
         return ResponseEntity.ok(status);
     }
+    
+    /**
+     * Update existing matched requests to connected status (for migration)
+     */
+    @PostMapping("/admin/update-matched-requests")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<String> updateMatchedRequests() {
+        randomVideoCallService.updateExistingMatchedRequests();
+        return ResponseEntity.ok("Updated existing matched requests to connected status");
+    }
 } 

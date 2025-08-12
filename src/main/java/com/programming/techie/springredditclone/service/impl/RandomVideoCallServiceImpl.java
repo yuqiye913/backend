@@ -24,6 +24,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import jakarta.annotation.PostConstruct;
 
 @Service
 @Slf4j
@@ -506,7 +507,7 @@ public class RandomVideoCallServiceImpl implements RandomVideoCallService {
     
     private void matchUsers(RandomVideoCallQueue user1, RandomVideoCallQueue user2) {
         // Update user1
-        user1.setQueueStatus("matched");
+        user1.setQueueStatus("connected"); // Automatically accept - skip "matched" status
         user1.setMatchedAt(Instant.now());
         user1.setMatchedUserId(user2.getUser().getUserId());
         user1.setMatchedUsername(user2.getUser().getUsername());
@@ -515,9 +516,10 @@ public class RandomVideoCallServiceImpl implements RandomVideoCallService {
         user1.setMatchScore(calculateMatchScore(user1, user2));
         user1.setMatchReason("Random match based on preferences");
         user1.setLastActivityAt(Instant.now());
+        user1.setCallStartedAt(Instant.now()); // Set call start time immediately
         
         // Update user2
-        user2.setQueueStatus("matched");
+        user2.setQueueStatus("connected"); // Automatically accept - skip "matched" status
         user2.setMatchedAt(Instant.now());
         user2.setMatchedUserId(user1.getUser().getUserId());
         user2.setMatchedUsername(user1.getUser().getUsername());
@@ -526,6 +528,7 @@ public class RandomVideoCallServiceImpl implements RandomVideoCallService {
         user2.setMatchScore(calculateMatchScore(user2, user1));
         user2.setMatchReason("Random match based on preferences");
         user2.setLastActivityAt(Instant.now());
+        user2.setCallStartedAt(Instant.now()); // Set call start time immediately
         
         // Generate WebRTC session info
         String sessionId = "random_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
@@ -544,7 +547,7 @@ public class RandomVideoCallServiceImpl implements RandomVideoCallService {
         queueRepository.save(user1);
         queueRepository.save(user2);
         
-        log.info("Matched users {} and {} for random video call", 
+        log.info("Automatically connected users {} and {} for random video call", 
                 user1.getUser().getUsername(), user2.getUser().getUsername());
     }
     
@@ -719,5 +722,33 @@ public class RandomVideoCallServiceImpl implements RandomVideoCallService {
             "Matching system is running normally" : 
             "Matching system is currently disabled");
         return status;
+    }
+
+    @PostConstruct
+    public void initialize() {
+        // Update any existing "matched" requests to "connected" status
+        updateExistingMatchedRequests();
+    }
+    
+    @Override
+    public void updateExistingMatchedRequests() {
+        try {
+            List<RandomVideoCallQueue> matchedRequests = queueRepository.findByStatus("matched");
+            if (!matchedRequests.isEmpty()) {
+                log.info("Found {} existing matched requests, updating to connected status", matchedRequests.size());
+                
+                for (RandomVideoCallQueue request : matchedRequests) {
+                    request.setQueueStatus("connected");
+                    request.setCallStartedAt(Instant.now());
+                    request.setLastActivityAt(Instant.now());
+                    queueRepository.save(request);
+                    
+                    log.info("Updated request {} for user {} from matched to connected", 
+                            request.getRequestId(), request.getUser().getUsername());
+                }
+            }
+        } catch (Exception e) {
+            log.error("Error updating existing matched requests", e);
+        }
     }
 } 

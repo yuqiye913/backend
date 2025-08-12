@@ -129,6 +129,11 @@ public interface RandomVideoCallService {
     MatchingSystemStatus getMatchingSystemStatus();
     
     /**
+     * Update existing matched requests to connected status (for migration)
+     */
+    void updateExistingMatchedRequests();
+    
+    /**
      * Queue statistics class
      */
     class QueueStatistics {
