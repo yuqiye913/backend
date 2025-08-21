@@ -36,6 +36,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.oauth2.jwt.Jwt;
 import com.programming.techie.springredditclone.exceptions.InvalidPostContentException;
+import com.programming.techie.springredditclone.service.RedisService;
 
 @Service
 @AllArgsConstructor
@@ -52,6 +53,7 @@ public class PostServiceImpl implements PostService {
     private final PostMapper postMapper;
     private final CursorUtil cursorUtil;
     private final VoteRepository voteRepository;
+    private final RedisService redisService;
 
     @Override
     public void save(PostRequest postRequest) {
@@ -141,6 +143,16 @@ public class PostServiceImpl implements PostService {
     @Override
     @Transactional(readOnly = true)
     public PostResponse getPost(Long id) {
+        // Try to get from cache first
+        String cacheKey = "post:" + id;
+        PostResponse cachedResponse = redisService.get(cacheKey, PostResponse.class);
+        
+        if (cachedResponse != null) {
+            log.debug("Post {} retrieved from cache", id);
+            return cachedResponse;
+        }
+        
+        // If not in cache, get from database
         Post post = postRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Post not found with id - " + id));
         
@@ -152,6 +164,10 @@ public class PostServiceImpl implements PostService {
             response.setUpVote(isPostUpVoted(post, currentUser));
             response.setDownVote(isPostDownVoted(post, currentUser));
         }
+        
+        // Cache the response for 30 minutes
+        redisService.set(cacheKey, response, 30, java.util.concurrent.TimeUnit.MINUTES);
+        log.debug("Post {} cached for 30 minutes", id);
         
         return response;
     }
@@ -400,6 +416,11 @@ public class PostServiceImpl implements PostService {
         
         // Save the updated post
         postRepository.save(existingPost);
+        
+        // Invalidate cache for this post
+        String cacheKey = "post:" + postId;
+        redisService.delete(cacheKey);
+        log.debug("Post {} cache invalidated after update", postId);
     }
 
     @Override
@@ -416,6 +437,11 @@ public class PostServiceImpl implements PostService {
         
         // Delete the post
         postRepository.delete(existingPost);
+        
+        // Invalidate cache for this post
+        String cacheKey = "post:" + postId;
+        redisService.delete(cacheKey);
+        log.debug("Post {} cache invalidated after deletion", postId);
     }
     
     private boolean isPostUpVoted(Post post, User user) {
