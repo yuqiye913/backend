@@ -53,4 +53,12 @@ public class AuthController {
         refreshTokenService.deleteRefreshToken(refreshTokenRequest.getRefreshToken());
         return ResponseEntity.status(OK).body("Refresh Token Deleted Successfully!!");
     }
+
+    @GetMapping("/health")
+    public ResponseEntity<Map<String, String>> health() {
+        Map<String, String> response = new HashMap<>();
+        response.put("status", "UP");
+        response.put("message", "Backend is running");
+        return new ResponseEntity<>(response, OK);
+    }
 }
