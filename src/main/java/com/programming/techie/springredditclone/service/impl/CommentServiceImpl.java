@@ -1,0 +1,315 @@
+package com.programming.techie.springredditclone.service.impl;
+
+import com.programming.techie.springredditclone.dto.CommentsDto;
+import com.programming.techie.springredditclone.dto.CreateCommentRequest;
+import com.programming.techie.springredditclone.dto.CursorPageResponse;
+import com.programming.techie.springredditclone.exceptions.PostNotFoundException;
+import com.programming.techie.springredditclone.exceptions.SpringRedditException;
+import com.programming.techie.springredditclone.mapper.CommentMapper;
+import com.programming.techie.springredditclone.model.Comment;
+import com.programming.techie.springredditclone.model.NotificationEmail;
+import com.programming.techie.springredditclone.model.Post;
+import com.programming.techie.springredditclone.model.User;
+import com.programming.techie.springredditclone.model.VoteType;
+import com.programming.techie.springredditclone.repository.CommentRepository;
+import com.programming.techie.springredditclone.repository.PostRepository;
+import com.programming.techie.springredditclone.repository.UserRepository;
+import com.programming.techie.springredditclone.repository.VoteRepository;
+import com.programming.techie.springredditclone.event.PostCommentedEvent;
+import com.programming.techie.springredditclone.service.AuthService;
+import com.programming.techie.springredditclone.service.BlockService;
+import com.programming.techie.springredditclone.service.BlockValidationService;
+import com.programming.techie.springredditclone.service.CommentService;
+import com.programming.techie.springredditclone.service.NotificationService;
+import com.programming.techie.springredditclone.util.CursorUtil;
+import lombok.AllArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.stereotype.Service;
+
+import java.util.List;
+
+@Service
+@AllArgsConstructor
+public class CommentServiceImpl implements CommentService {
+    private static final String POST_URL = "";
+    private final PostRepository postRepository;
+    private final UserRepository userRepository;
+    private final AuthService authService;
+    private final CommentMapper commentMapper;
+    private final CommentRepository commentRepository;
+    private final NotificationService notificationService;
+    private final BlockService blockService;
+    private final BlockValidationService blockValidationService;
+    private final CursorUtil cursorUtil;
+    private final ApplicationEventPublisher eventPublisher;
+    private final VoteRepository voteRepository;
+
+    @Override
+    public void save(CommentsDto commentsDto) {
+        Post post = postRepository.findById(commentsDto.getPostId())
+                .orElseThrow(() -> new PostNotFoundException(commentsDto.getPostId().toString()));
+        
+        User currentUser = authService.getCurrentUser();
+        User postOwner = post.getUser();
+        
+        // Use the new BlockValidationService for cleaner validation
+        blockValidationService.validateCanInteract(postOwner);
+        
+        Comment comment = commentMapper.map(commentsDto, post, currentUser);
+        commentRepository.save(comment);
+
+        // Increment comment count for the post
+        post.setCommentCount(post.getCommentCount() + 1);
+        postRepository.save(post);
+
+        // Publish comment event for notification
+        eventPublisher.publishEvent(new PostCommentedEvent(this, comment.getUser(), post.getUser(), post, comment));
+    }
+    
+    @Override
+    public void createComment(CreateCommentRequest createCommentRequest) {
+        Post post = postRepository.findById(createCommentRequest.getPostId())
+                .orElseThrow(() -> new PostNotFoundException(createCommentRequest.getPostId().toString()));
+        
+        User currentUser = authService.getCurrentUser();
+        User postOwner = post.getUser();
+        
+        // Use the new BlockValidationService for cleaner validation
+        blockValidationService.validateCanInteract(postOwner);
+        
+        // Check for inappropriate language
+        containsSwearWords(createCommentRequest.getText());
+        
+        // Get parent comment if this is a reply
+        Comment parentComment = null;
+        if (createCommentRequest.getParentCommentId() != null) {
+            parentComment = commentRepository.findById(createCommentRequest.getParentCommentId())
+                    .orElseThrow(() -> new SpringRedditException("Parent comment not found with ID: " + createCommentRequest.getParentCommentId()));
+        }
+        
+        Comment comment = commentMapper.mapToComment(createCommentRequest, post, currentUser, parentComment);
+        commentRepository.save(comment);
+
+        // Increment comment count for the post
+        post.setCommentCount(post.getCommentCount() + 1);
+        postRepository.save(post);
+        
+        // Note: We don't manually update reply count anymore
+        // Reply count is calculated dynamically from the database
+
+        // Publish comment event for notification
+        eventPublisher.publishEvent(new PostCommentedEvent(this, comment.getUser(), post.getUser(), post, comment));
+    }
+
+    @Override
+    public void deleteComment(Long commentId) {
+        Comment comment = commentRepository.findById(commentId)
+                .orElseThrow(() -> new SpringRedditException("Comment not found with ID: " + commentId));
+        
+        // Check if user is authorized to delete this comment
+        User currentUser = authService.getCurrentUser();
+        if (!comment.getUser().equals(currentUser) && !comment.getPost().getUser().equals(currentUser)) {
+            throw new SpringRedditException("You are not authorized to delete this comment");
+        }
+        
+        // Soft delete the comment
+        comment.setDeleted(true);
+        commentRepository.save(comment);
+        
+        // Decrement comment count for the post
+        Post post = comment.getPost();
+        post.setCommentCount(Math.max(0, post.getCommentCount() - 1)); // Ensure count doesn't go negative
+        postRepository.save(post);
+        
+        // If this was a reply, decrement the parent comment's reply count
+        if (comment.getParentComment() != null) {
+            Comment parentComment = comment.getParentComment();
+            parentComment.setReplyCount(Math.max(0, parentComment.getReplyCount() - 1));
+            commentRepository.save(parentComment);
+        }
+    }
+
+
+
+    @Override
+    public List<CommentsDto> getAllCommentsForPost(Long postId) {
+        Post post = postRepository.findById(postId).orElseThrow(() -> new PostNotFoundException(postId.toString()));
+        
+        return commentRepository.findByPost(post)
+                .stream()
+                .filter(comment -> {
+                    // Filter out comments from blocked users using the validation service
+                    return !blockValidationService.hasBlockRelationship(comment.getUser().getUserId());
+                })
+                .map(comment -> {
+                    CommentsDto dto = commentMapper.mapToDto(comment);
+                    dto.setUpVote(false);
+                    if (authService.isLoggedIn()) {
+                        try {
+                            User currentUser = authService.getCurrentUser();
+                            voteRepository.findByCommentAndUser(comment, currentUser)
+                                .ifPresent(vote -> {
+                                    if (vote.getVoteType() == VoteType.UPVOTE) {
+                                        dto.setUpVote(true);
+                                    }
+                                });
+                        } catch (Exception e) {
+                            // User not authenticated, keep upVote as false
+                        }
+                    }
+                    return dto;
+                }).toList();
+    }
+
+    @Override
+    public CursorPageResponse<CommentsDto> getCommentsForPost(Long postId, String cursor, Integer limit) {
+        // Validate post exists
+        postRepository.findById(postId).orElseThrow(() -> new PostNotFoundException(postId.toString()));
+        
+        // Set default limit if not provided
+        int actualLimit = (limit != null) ? Math.min(limit, 50) : 20; // Max 50, default 20
+        
+        List<Comment> comments;
+        String nextCursor = null;
+        
+        if (cursor == null) {
+            // First page
+            comments = commentRepository.findTopLevelCommentsByPostFirstPage(postId);
+        } else {
+            // Subsequent pages
+            CursorUtil.CursorData cursorData = cursorUtil.decodeCursor(cursor);
+            comments = commentRepository.findTopLevelCommentsByPostWithCursor(postId, cursorData.getId());
+        }
+        
+        // Apply limit and get next cursor
+        if (comments.size() > actualLimit) {
+            comments = comments.subList(0, actualLimit);
+            Comment lastComment = comments.get(actualLimit - 1);
+            nextCursor = cursorUtil.encodeCursor(lastComment.getCreatedDate(), lastComment.getId());
+        }
+        
+        List<CommentsDto> commentDtos = comments.stream()
+                .filter(comment -> {
+                    // Filter out comments from blocked users using the validation service
+                    return !blockValidationService.hasBlockRelationship(comment.getUser().getUserId());
+                })
+                .map(comment -> {
+                    CommentsDto dto = commentMapper.mapToDto(comment);
+                    dto.setUpVote(false);
+                    if (authService.isLoggedIn()) {
+                        try {
+                            User currentUser = authService.getCurrentUser();
+                            voteRepository.findByCommentAndUser(comment, currentUser)
+                                .ifPresent(vote -> {
+                                    if (vote.getVoteType() == VoteType.UPVOTE) {
+                                        dto.setUpVote(true);
+                                    }
+                                });
+                        } catch (Exception e) {
+                            // User not authenticated, keep upVote as false
+                        }
+                    }
+                    return dto;
+                })
+                .toList();
+        
+        return new CursorPageResponse<>(commentDtos, nextCursor, nextCursor != null, actualLimit);
+    }
+
+    @Override
+    public CursorPageResponse<CommentsDto> getCommentsForUser(String userName, String cursor, Integer limit) {
+        // Validate user exists
+        userRepository.findByUsername(userName)
+                .orElseThrow(() -> new UsernameNotFoundException(userName));
+        
+        // Set default limit if not provided
+        int actualLimit = (limit != null) ? Math.min(limit, 50) : 20; // Max 50, default 20
+        
+        List<Comment> comments;
+        String nextCursor = null;
+        
+        if (cursor == null) {
+            // First page
+            comments = commentRepository.findCommentsByUserFirstPage(userName);
+        } else {
+            // Subsequent pages
+            CursorUtil.CursorData cursorData = cursorUtil.decodeCursor(cursor);
+            comments = commentRepository.findCommentsByUserWithCursor(userName, cursorData.getId());
+        }
+        
+        // Apply limit and get next cursor
+        if (comments.size() > actualLimit) {
+            comments = comments.subList(0, actualLimit);
+            Comment lastComment = comments.get(actualLimit - 1);
+            nextCursor = cursorUtil.encodeCursor(lastComment.getCreatedDate(), lastComment.getId());
+        }
+        
+        List<CommentsDto> commentDtos = comments.stream()
+                .filter(comment -> {
+                    // Filter out comments from blocked users using the validation service
+                    return !blockValidationService.hasBlockRelationship(comment.getUser().getUserId());
+                })
+                .map(commentMapper::mapToDto)
+                .toList();
+        
+        return new CursorPageResponse<>(commentDtos, nextCursor, nextCursor != null, actualLimit);
+    }
+
+    @Override
+    public CursorPageResponse<CommentsDto> getRepliesForComment(Long commentId, String cursor, Integer limit) {
+        // Validate comment exists
+        commentRepository.findById(commentId)
+                .orElseThrow(() -> new SpringRedditException("Comment not found with ID: " + commentId));
+        
+        // Set default limit if not provided
+        int actualLimit = (limit != null) ? Math.min(limit, 50) : 20; // Max 50, default 20
+        
+        List<Comment> replies;
+        String nextCursor = null;
+        
+        if (cursor == null) {
+            // First page
+            replies = commentRepository.findRepliesByCommentFirstPage(commentId);
+        } else {
+            // Subsequent pages
+            CursorUtil.CursorData cursorData = cursorUtil.decodeCursor(cursor);
+            replies = commentRepository.findRepliesByCommentWithCursor(commentId, cursorData.getId());
+        }
+        
+        // Apply limit and get next cursor
+        if (replies.size() > actualLimit) {
+            replies = replies.subList(0, actualLimit);
+            Comment lastReply = replies.get(actualLimit - 1);
+            nextCursor = cursorUtil.encodeCursor(lastReply.getCreatedDate(), lastReply.getId());
+        }
+        
+        List<CommentsDto> replyDtos = replies.stream()
+                .filter(reply -> {
+                    // Filter out replies from blocked users using the validation service
+                    return !blockValidationService.hasBlockRelationship(reply.getUser().getUserId());
+                })
+                .map(commentMapper::mapToDto)
+                .toList();
+        
+        return new CursorPageResponse<>(replyDtos, nextCursor, nextCursor != null, actualLimit);
+    }
+
+    @Override
+    public List<CommentsDto> getAllCommentsForUser(String userName) {
+        User user = userRepository.findByUsername(userName)
+                .orElseThrow(() -> new UsernameNotFoundException(userName));
+        return commentRepository.findAllByUser(user)
+                .stream()
+                .map(commentMapper::mapToDto)
+                .toList();
+    }
+
+    @Override
+    public boolean containsSwearWords(String comment) {
+        if (comment.contains("shit")) {
+            throw new SpringRedditException("Comments contains unacceptable language");
+        }
+        return false;
+    }
+} 
