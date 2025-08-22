@@ -18,7 +18,7 @@ RUN mvn clean package -DskipTests
 FROM eclipse-temurin:17-jdk-alpine
 
 # Create app user for security
-RUN groupadd -r appuser && useradd -r -g appuser appuser
+RUN addgroup -g 1001 -S appuser && adduser -S appuser -G appuser
 
 # Set working directory
 WORKDIR /app
