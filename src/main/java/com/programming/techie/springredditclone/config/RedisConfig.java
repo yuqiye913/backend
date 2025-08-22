@@ -9,7 +9,7 @@ import org.springframework.data.redis.serializer.StringRedisSerializer;
 import org.springframework.session.data.redis.config.annotation.web.http.EnableRedisHttpSession;
 
 @Configuration
-@EnableRedisHttpSession(maxInactiveIntervalInSeconds = 3600) // 1 hour session timeout
+// @EnableRedisHttpSession(maxInactiveIntervalInSeconds = 3600) // 1 hour session timeout - disabled for Railway deployment
 public class RedisConfig {
 
     @Bean
