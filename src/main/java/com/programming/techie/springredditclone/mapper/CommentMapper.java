@@ -49,6 +49,7 @@ public interface CommentMapper {
     // Map Comment to CommentsDto (basic mapping without replies)
     @Mapping(target = "postId", expression = "java(comment.getPost().getPostId())")
     @Mapping(target = "userName", expression = "java(comment.getUser().getUsername())")
+    @Mapping(target = "userId", expression = "java(comment.getUser().getUserId())")
     @Mapping(target = "parentCommentId", expression = "java(comment.getParentComment() != null ? comment.getParentComment().getId() : null)")
     @Mapping(target = "replies", ignore = true)
     @Mapping(target = "replyCount", expression = "java(comment.getReplyCount() != null ? comment.getReplyCount() : 0)")

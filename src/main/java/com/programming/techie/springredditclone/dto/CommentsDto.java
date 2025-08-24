@@ -22,6 +22,7 @@ public class CommentsDto {
     @NotBlank(message = "Comment text is required")
     private String text;
     private String userName;
+    private Long userId;  // Add user ID for frontend functionality
     
     // Threading/replies support
     private Long parentCommentId;
